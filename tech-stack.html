@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Felt World Tech Stack</title>
+<style>
+  :root { --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --text2: #cbd5e1; --muted: #94a3b8; --orange: #fb923c; --teal: #2dd4bf; --line: #334155; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text2); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { color: var(--text); font-size: 2rem; margin: 0 0 4px; }
+  h2 { color: var(--orange); font-size: 1.35rem; margin: 40px 0 12px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  h3 { color: var(--teal); font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--teal); }
+  code { background: var(--card); color: var(--text); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+  pre { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; }
+  pre code { padding: 0; background: none; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin: 16px 0; }
+  .card.no { border-left: 4px solid var(--orange); }
+  .card.yes { border-left: 4px solid var(--teal); }
+  .wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: .95rem; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--card); color: var(--text); }
+  .num { font-variant-numeric: tabular-nums; }
+  .ok { color: var(--teal); font-weight: 600; }
+  .gap { color: var(--orange); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+<h1>Felt World — tech stack and physics tests</h1>
+<p class="lead">How the game is built, how its physics was tested in each world, and what was not tested. <a href="feltworld/">Play the game</a> · <a href="https://github.com/az9713/opus-5.5-open-world-game">Source on GitHub</a></p>
+
+<h2>1. Is a game engine used?</h2>
+<div class="card no">
+<p><strong>No.</strong> There is no game engine (no Unity, Unreal, Godot, Babylon.js or PlayCanvas) and no physics engine (no Rapier, cannon.js or Ammo.js).</p>
+<p>The game uses <strong>three.js 0.170.0</strong>. three.js is a rendering library: it gives a scene graph, cameras, materials, and WebGL drawing. It does not give a game loop, collision, physics, audio, input, or world streaming. The game code writes all of those itself, in one JavaScript module inside <code>feltworld/index.html</code> (3,110 lines, 172,170 bytes).</p>
+</div>
+
+<h2>2. Tech stack</h2>
+<div class="wrap"><table>
+<tr><th>Part</th><th>What is used</th></tr>
+<tr><td>Delivery</td><td>One HTML file. No build step, no bundler, no package manager. Any static web server serves it. GitHub Pages hosts the play link.</td></tr>
+<tr><td>Rendering</td><td>three.js 0.170.0 from the jsDelivr CDN through an import map (<code>three</code> and <code>three/addons/</code>). WebGL.</td></tr>
+<tr><td>Look</td><td>Toon materials with a soft gradient ramp. Running-stitch outlines (inverted hull, fragments discarded in a dash pattern). A post-process <code>ShaderMaterial</code>: wool-fibre fuzz, felt grain, soft seams at depth edges, a stitched fabric border. A sky <code>ShaderMaterial</code>.</td></tr>
+<tr><td>Textures</td><td>Drawn at start on 2D <code>&lt;canvas&gt;</code> elements: felt noise, knitted roads with a stitched centre line, quilted fields. No image files.</td></tr>
+<tr><td>World</td><td>Pure functions of (x, z): height, biome masks (town, fields, meadow, forest, mountain, ocean), and a warped road grid. Chunks are built one per frame, nearest first, from a seeded random generator per chunk, and are removed past a radius.</td></tr>
+<tr><td>Props and crowds</td><td><code>InstancedMesh</code> batches of scaled primitives with a colour per instance. Traffic, pedestrians, sheep, rabbits, fish, jellyfish, rays, sea turtles, crabs and whales are crowds on instanced meshes that respawn round the player.</td></tr>
+<tr><td>Physics</td><td>Hand-written. See section 3.</td></tr>
+<tr><td>Audio</td><td>Web Audio API only: a look-ahead note scheduler, a generative radio with several songs, note-phrase chimes, engine hum, wind (band-pass noise), and a low-pass filter on the master bus under water. No audio files.</td></tr>
+<tr><td>UI</td><td>HTML and CSS over the canvas: title card, clock and time-of-day buttons, speed, mode, depth readout, collected counts, minimap, help, Pause and Music buttons, touch joystick and buttons.</td></tr>
+<tr><td>Fonts</td><td>Fredoka and Patrick Hand from Google Fonts.</td></tr>
+<tr><td>Quality</td><td>Three tiers. Low: pixel ratio 0.75, no shadows, 40 cars, 30 pedestrians. Medium: 1.0, 1024 px shadows, 70 cars, 50 pedestrians. High: 1.5, 2048 px shadows, 110 cars, 80 pedestrians, a larger chunk radius. The tier is saved in <code>localStorage</code>.</td></tr>
+<tr><td>Testing</td><td><code>feltworld/physics-check.js</code>, an ES module that runs inside the live game. Claude drove it in Chrome through the Claude in Chrome extension. <code>node --check</code> on the extracted module did syntax checks after each edit.</td></tr>
+<tr><td>Author</td><td>Claude Code with the Opus 5.5 model, from a sequence of requests. See the <a href="https://github.com/az9713/opus-5.5-open-world-game#readme">README</a>.</td></tr>
+</table></div>
+
+<h2>3. How the physics works</h2>
+<p>The physics is arcade physics. It does not simulate forces between bodies. It keeps every body on or above the correct surface and out of every solid thing.</p>
+<h3>Ground</h3>
+<p><code>groundAt(x, z)</code> returns the height of the ground as it is <em>drawn</em>: it interpolates the triangles of the chunk's terrain mesh, then takes the highest road deck at that point. Everything on land uses it: the player car, the walker, traffic, pedestrians, sheep, rabbits. Crabs, fish, jellyfish and rays use it for the sea floor. A drawn road flattens the ground under it fully, so a road deck cannot float above the terrain.</p>
+<h3>Solid things</h3>
+<p>Each chunk has a list of colliders: circles (trees, rocks, lamps) and rotated boxes (houses, fences, the shipwreck, the chest). Every collider has a height range: a <code>top</code>, and for tree crowns and windmill sails also a bottom (<code>bot</code>). <code>collide(p, rad, down, tall)</code> pushes a round body of radius <code>rad</code> and height <code>tall</code> out of every collider whose height range it meets, and out of every traffic vehicle (a moving rotated box). The bird can fly under a tree crown but not through it.</p>
+<p>These bodies collide: the player car, the submarine, the walker, the player turtle, the bird, pedestrians, sheep, rabbits, sea turtles, rays, whales and crabs. Kelp, coral, flowers and small bushes are passable on purpose. Sheep are passable for the player on purpose.</p>
+<h3>Traffic</h3>
+<ul>
+<li>Cars follow the car ahead in their lane.</li>
+<li>At a crossing, the car with the lower index goes first; the other car yields.</li>
+<li>A car never moves into another vehicle: if a step would cause an overlap, the step is undone.</li>
+<li>At a road end, a car does a U-turn as a 2.5 s arc. No car spawns within 30 m of a road end.</li>
+<li>A gridlock breaker respawns a car that has stopped for 8 s, if the camera does not see it or it is more than 120 m away.</li>
+</ul>
+
+<h2>4. How the physics was tested in all worlds</h2>
+<h3>The reference (the "oracle")</h3>
+<p>The test does not trust the game's own height code. For each sample it casts a ray straight down against the <strong>drawn</strong> terrain and road meshes (<code>drawnGround</code>). A body passes only if it is within a tolerance of what the player sees.</p>
+<h3>How it runs</h3>
+<p>The test imports the running game's debug handle (<code>window.__game</code>), teleports the player to each world, moves the game with <code>step(1/60, n)</code>, and samples every visible agent. It also sends real <code>KeyboardEvent</code>s (W, A, D, E, F, T, Q) through the same input path a player uses.</p>
+<h3>What each world checks</h3>
+<div class="wrap"><table>
+<tr><th>World</th><th>Checks</th><th>Tolerance</th></tr>
+<tr><td>Town</td><td>Traffic on the road; pedestrians on the ground; no two traffic vehicles inside each other (oriented-box separating-axis test); the player car on the ground; nothing inside a house, tree, lamp, fence or vehicle. Real input: drive with W + A for 8 s; press E to get out; walk with W, then W + D, for 8 s (the walker must cover more than 30 m); walk into a house and into a tree / rock / lamp; drive into a house.</td><td>On ground: −0.15 m to +0.35 m. Player car: −0.15 m to +0.45 m (it counts as airborne above 0.4 m).</td></tr>
+<tr><td>Forest</td><td>Drive into a tree; land agents on the ground and out of solids for 5 s.</td><td>As town.</td></tr>
+<tr><td>Mountain road</td><td>The test searches for the road lane with the largest gap between the road deck and the plain terrain, parks the car there, then holds W for 10 s. The car must stay on the road and move more than 50 m.</td><td>As town.</td></tr>
+<tr><td>Fields</td><td>Sheep and rabbits on the ground and out of trees and houses, for 20 s.</td><td>Sheep −0.3 m to +0.35 m; rabbits −0.3 m to +0.95 m (they hop).</td></tr>
+<tr><td>Deep sea (−70 m) and shallows (−14 m)</td><td>Fish, jellyfish, rays, sea turtles and whales stay above the sea floor and below the surface; a whale's nose and tail (±9 m) stay above the floor; crabs stand on the floor; no animal inside a seabed rock, the shipwreck or the chest; the submarine stays between the floor and the surface. 10 s each.</td><td>Crabs ±0.35 m. Inside a solid: more than 0.05 m fails.</td></tr>
+<tr><td>Sea, real input</td><td>Drive the submarine (W) into a seabed rock; press T and swim the turtle into the same rock; press T, then hold Q + W for 4 s to dive.</td><td>The body must stop at the rock surface.</td></tr>
+<tr><td>Air</td><td>Press F on a meadow road, dive with W for 3 s, glide for 2 s: the bird stays above the ground and the water. The bird glides into a house at mid-wall height and into a tree crown.</td><td>The bird must stop at the solid.</td></tr>
+</table></div>
+<h3>Proof that the test can fail: fault injection</h3>
+<p><code>m.faults()</code> breaks the physics on purpose in 9 ways and checks that the matching check goes red. This shows that no check passes by construction.</p>
+<ol>
+<li>A traffic car 2 m under the road.</li>
+<li>A traffic car moved into another car.</li>
+<li>The player car put inside a house.</li>
+<li>The player car 3 m under the ground.</li>
+<li>The bird put inside a house.</li>
+<li>A sheep put inside a tree.</li>
+<li>A fish lifted out of the sea.</li>
+<li>A crab 2 m under the sea floor.</li>
+<li>A whale dropped onto the sea floor.</li>
+</ol>
+<h3>Traffic soak</h3>
+<p><code>m.soak('town')</code> runs 40 s of traffic (2,400 steps) and counts vehicles inside each other, cars stopped for more than 20 s (with the reason each car gives), and U-turns started, finished, and longer than 10 s.</p>
+
+<h2>5. Results</h2>
+<div class="card yes">
+<div class="wrap"><table>
+<tr><th>Test</th><th>Result</th></tr>
+<tr><td><code>run()</code>, Low quality</td><td class="num"><span class="ok">150 checks, 0 fails</span>, 59,562 samples</td></tr>
+<tr><td><code>run()</code>, Medium quality</td><td class="num"><span class="ok">150 checks, 0 fails</span>, 89,044 samples</td></tr>
+<tr><td><code>run()</code>, High quality</td><td class="num"><span class="ok">150 checks, 0 fails</span>, 130,379 samples</td></tr>
+<tr><td><code>faults()</code></td><td class="num"><span class="ok">9 of 9 faults caught</span></td></tr>
+<tr><td><code>soak()</code></td><td class="num"><span class="ok">0 overlaps, 0 cars stopped for more than 20 s</span></td></tr>
+</table></div>
+</div>
+<p><strong>Before the physics pass</strong>, an earlier version of the same test found these failures: 700 of 700 traffic samples failed "on road", and the worst car was 10.8 m below the road. The overlap check found 68 to 104 traffic overlaps.</p>
+<h3>Cost of the physics pass</h3>
+<p>Median time per frame (step + render) on High quality, measured in a hidden Chrome tab:</p>
+<div class="wrap"><table>
+<tr><th>Place</th><th>Before</th><th>After</th></tr>
+<tr><td>Town</td><td class="num">6.2 ms</td><td class="num">7.5 ms</td></tr>
+<tr><td>Fields</td><td class="num">5.8 ms</td><td class="num">7.3 ms</td></tr>
+<tr><td>Deep sea</td><td class="num">6.7 ms</td><td class="num">8.0 ms</td></tr>
+</table></div>
+
+<h2>6. What was not tested</h2>
+<div class="card no">
+<ul>
+<li><span class="gap">Real frame rate on screen at High quality.</span> Only the hidden-tab frame times above were measured.</li>
+<li><span class="gap">Phones.</span> Touch controls were tested only in a 667 × 375 frame in desktop Chrome. The frame rate on a real phone and the size of the buttons under a real thumb were not measured.</li>
+<li><span class="gap">Other browsers.</span> All tests ran in Chrome. Firefox and Safari were not tested.</li>
+<li><span class="gap">Audio.</span> No automatic test covers sound. It is not known if audio starts again after Pause → Play when the game was started with a real Start click.</li>
+<li><span class="gap">Some sea objects.</span> Starfish, urchins, the shipwreck and the treasure chest were never seen in a screenshot. The physics test covers the shipwreck and chest as colliders only.</li>
+<li><span class="gap">A human play-test of the final physics build.</span> The automatic tests passed, but a person has not yet played this build to confirm it.</li>
+<li><span class="gap">Everything between samples.</span> The test samples every 5 to 60 frames. A fault shorter than the sample interval can pass unseen.</li>
+</ul>
+</div>
+<h3>Known limits (not overlaps)</h3>
+<ul>
+<li>A U-turn can wait more than 10 s when a crossing car stops in its arc.</li>
+<li>A traffic jam that the camera sees stays until you look away, because the gridlock breaker only respawns cars that the camera does not see.</li>
+<li>Fish check the sea floor but not rocks when they move. The tests found 0 fish inside rocks.</li>
+</ul>
+</main>
+</body>
+</html>

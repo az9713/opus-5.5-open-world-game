@@ -1,0 +1,6 @@
+# ponytail: allowlist, so private notes, transcripts and the reference repo never get committed
+/*
+!/.gitignore
+!/README.md
+!/tech-stack.html
+!/feltworld/
