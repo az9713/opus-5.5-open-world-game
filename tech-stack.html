@@ -66,11 +66,20 @@
 <p><code>groundAt(x, z)</code> returns the height of the ground as it is <em>drawn</em>: it interpolates the triangles of the chunk's terrain mesh, then takes the highest road deck at that point. Everything on land uses it: the player car, the walker, traffic, pedestrians, sheep, rabbits. Crabs, fish, jellyfish and rays use it for the sea floor. A drawn road flattens the ground under it fully, so a road deck cannot float above the terrain.</p>
 <h3>Solid things</h3>
 <p>Each chunk has a list of colliders: circles (trees, rocks, lamps) and rotated boxes (houses, fences, the shipwreck, the chest). Every collider has a height range: a <code>top</code>, and for tree crowns and windmill sails also a bottom (<code>bot</code>). <code>collide(p, rad, down, tall)</code> pushes a round body of radius <code>rad</code> and height <code>tall</code> out of every collider whose height range it meets, and out of every traffic vehicle (a moving rotated box). The bird can fly under a tree crown but not through it.</p>
+<h3>Moving bodies against each other</h3>
+<ul>
+<li>Pedestrians walking one way keep 0.6 m nearer the road than pedestrians walking the other way, so they pass. A pedestrian never steps further into another pedestrian or into a car; if two block each other for 1.5 s, one turns round.</li>
+<li>Sheep and rabbits never step further into another sheep or rabbit.</li>
+<li>Jellyfish, rays, sea turtles, whales and crabs push each other apart (and out of the submarine and the player turtle) before each one moves, so each animal's own floor, surface and rock rules still apply after the push. Each body is an upright cylinder (a jellyfish's includes its tentacles, 2.8 × size under the bell). The game and the test read the same table of animal cylinders (the submarine's cylinder, 2.2 m wide and ±1.4 m high, is written in both files). The push is sideways only, at most 0.3 m per frame (no limit for an animal that just appeared), and it starts 1 m before two bodies touch vertically (2 m for a ray, which climbs and drops with the floor at up to 10 m/s). A new animal only appears at a spot clear of the others. Rays glide at least 2 m above the floor and lift over crabs. Fish are not in this rule: a school keeps its formation.</li>
+<li>A whale keeps its nose and tail, not only its middle, above the sea floor.</li>
+</ul>
 <p>These bodies collide: the player car, the submarine, the walker, the player turtle, the bird, pedestrians, sheep, rabbits, sea turtles, rays, whales and crabs. Kelp, coral, flowers and small bushes are passable on purpose. Sheep are passable for the player on purpose.</p>
 <h3>Traffic</h3>
 <ul>
 <li>Cars follow the car ahead in their lane.</li>
-<li>At a crossing, the car with the lower index goes first; the other car yields.</li>
+<li>At a crossing of two main roads, only one road may use the crossing at a time. A car waits at a stop line until no car of the other road is inside, and the car that arrived first goes first. Before this rule, four cars could each wait for the next one round the crossing and stop for ever (a 90 s traffic run on the old code found 2 such circles).</li>
+<li>Where two cars' paths meet away from a main crossing, the car with the lower index goes first; the other car yields.</li>
+<li>A car stops for a pedestrian in front of it.</li>
 <li>A car never moves into another vehicle: if a step would cause an overlap, the step is undone.</li>
 <li>At a road end, a car does a U-turn as a 2.5 s arc. No car spawns within 30 m of a road end.</li>
 <li>A gridlock breaker respawns a car that has stopped for 8 s, if the camera does not see it or it is more than 120 m away.</li>
@@ -106,22 +115,27 @@
 <li>A whale dropped onto the sea floor.</li>
 </ol>
 <h3>Traffic soak</h3>
-<p><code>m.soak('town')</code> runs 40 s of traffic (2,400 steps) and counts vehicles inside each other, cars stopped for more than 20 s (with the reason each car gives), and U-turns started, finished, and longer than 10 s.</p>
+<p><code>m.soak('town')</code> runs 90 s of traffic (5,400 steps) and counts vehicles inside each other, cars stopped for more than 20 s (with the reason each car gives), U-turns started, finished, and longer than 10 s, and <strong>deadlocks</strong>: it follows each stopped car's reason ("follow 12", "cross 7", "junction 3") to the car it waits for, and a path that comes back to a car already on it is a deadlock. The old count of "cars stopped for more than 20 s" missed the crossing deadlock, because the gridlock breaker removes stuck cars that the camera does not see.</p>
+<h3>Body against body</h3>
+<p><code>m.overlaps(biome)</code> runs 20 s in a town, a field or the sea and counts pairs more than 0.3 m inside each other: traffic (the whole body, as circles along its length) against trees, lamps and houses; traffic against pedestrians and sheep; pedestrian against pedestrian; sheep and rabbits against each other; every pair of whales, sea turtles, rays, jellyfish and crabs; and the submarine against each of them.</p>
 
 <h2>5. Results</h2>
 <div class="card yes">
 <div class="wrap"><table>
-<tr><th>Test</th><th>Result</th></tr>
-<tr><td><code>run()</code>, Low quality</td><td class="num"><span class="ok">150 checks, 0 fails</span>, 59,562 samples</td></tr>
-<tr><td><code>run()</code>, Medium quality</td><td class="num"><span class="ok">150 checks, 0 fails</span>, 89,044 samples</td></tr>
-<tr><td><code>run()</code>, High quality</td><td class="num"><span class="ok">150 checks, 0 fails</span>, 130,379 samples</td></tr>
-<tr><td><code>faults()</code></td><td class="num"><span class="ok">9 of 9 faults caught</span></td></tr>
-<tr><td><code>soak()</code></td><td class="num"><span class="ok">0 overlaps, 0 cars stopped for more than 20 s</span></td></tr>
+<tr><th>Test</th><th>Low</th><th>Medium</th><th>High</th></tr>
+<tr><td><code>run()</code></td><td class="num"><span class="ok">150 checks, 0 fails</span>, 59,349 samples</td><td class="num"><span class="ok">150 checks, 0 fails</span>, 88,729 samples</td><td class="num"><span class="ok">150 checks, 0 fails</span>, 130,905 samples</td></tr>
+<tr><td><code>faults()</code></td><td class="num"><span class="ok">9 of 9 caught</span></td><td class="num"><span class="ok">9 of 9 caught</span></td><td class="num"><span class="ok">9 of 9 caught</span></td></tr>
+<tr><td><code>overlaps()</code> town / field / sea</td><td class="num"><span class="ok">0 bad</span> in 1,683 / 1,698 / 6,352</td><td class="num"><span class="ok">0 bad</span> in 3,107 / 3,295 / 6,872</td><td class="num"><span class="ok">0 bad</span> in 5,416 / 5,975 / 10,869</td></tr>
+<tr><td><code>soak('town')</code>, 90 s</td><td class="num"><span class="ok">0 overlaps, 0 deadlocks, 0 stopped &gt; 20 s</span>; 5,029 close pairs; 52 of 52 U-turns finished</td><td class="num"><span class="ok">0 overlaps, 0 deadlocks, 0 stopped &gt; 20 s</span>; 27,187 close pairs; 40 of 41 U-turns finished</td><td class="num"><span class="ok">0 overlaps, 0 deadlocks, 0 stopped &gt; 20 s</span>; 64,862 close pairs; 56 of 57 U-turns finished</td></tr>
+<tr><td>Test time (all five)</td><td class="num">58 s</td><td class="num">74 s</td><td class="num">102 s</td></tr>
 </table></div>
 </div>
+<p>An unfinished U-turn is one still turning when the 90 s ended. No U-turn took more than 10 s.</p>
+<p><strong>Sea animals, every frame.</strong> <code>overlaps()</code> samples every 0.5 s. A separate run measured every sea pair on every frame: 3 runs of 40 s (2,400 frames) each on Medium, 12,430 to 18,732 close pairs per run. The worst overlap was 0.18 m, under the 0.3 m limit.</p>
+<p><strong>What the upright-cylinder check found first.</strong> The sea push used to treat each animal as a sphere, while the check treats it as an upright cylinder. The check failed on Low and on Medium. On Low, one 20 s run had 346 bad jellyfish-against-jellyfish samples, 3.51 m deep at worst. On Medium, the worst was a whale against a jellyfish, 4.27 m deep. The fixes: the game uses the check's cylinders; the push starts before two bodies meet vertically; a new animal appears only where it is clear; a ray lifts over a crab and over the top of a rock instead of a sideways jump of about 5 m.</p>
 <p><strong>Before the physics pass</strong>, an earlier version of the same test found these failures: 700 of 700 traffic samples failed "on road", and the worst car was 10.8 m below the road. The overlap check found 68 to 104 traffic overlaps.</p>
 <h3>Cost of the physics pass</h3>
-<p>Median time per frame (step + render) on High quality, measured in a hidden Chrome tab:</p>
+<p>Median time per frame (step + render) on High quality, measured in a hidden Chrome tab. These times are from before the crossing, pedestrian and sea-animal changes of 27 September 2026, and were not measured again:</p>
 <div class="wrap"><table>
 <tr><th>Place</th><th>Before</th><th>After</th></tr>
 <tr><td>Town</td><td class="num">6.2 ms</td><td class="num">7.5 ms</td></tr>

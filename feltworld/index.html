@@ -1613,7 +1613,7 @@ function frame(now) {
 // ============================================================ debug handle
 window.__game = {
   G, VEH, WALK, TURT, BIRD, keys, chunks, notes, phrases, camera, CAM, THREE, CH, WATER_Y, render, renderer,
-  heightAt, groundAt, masks, roadNear, roadCenter, roadAct, regionName,
+  heightAt, groundAt, masks, roadNear, roadCenter, roadAct, regionName, junction,
   teleport(x, z, y) { const e = activeEnt(); e.pos.set(x, y ?? groundAt(x, z) + 0.5, z); e.vy = 0; e.speed = 0; camInit = false; },
   // nearest point with seabed below `depth`, searching outward from the active entity
   findSea(depth = -30) {
@@ -1999,16 +1999,40 @@ function tHit(a, la, b, lb) {
   }
   return true;
 }
+// the next crossing with a road of the other primary family that car a has not yet cleared:
+// d = distance from a's centre to the crossing centre along a's road (ahead > 0), key = the crossing's id,
+// E = half length of the crossing box along a's road (longer when the roads cross at a slant)
+// how deep a round body (radius r) at (x, z) is inside traffic vehicle a's box; > 0 means inside
+function carDepth(a, x, z, r) {
+  const ox = x - a.x, oz = z - a.z, cs = Math.cos(a.yaw), sn = Math.sin(a.yaw);
+  return Math.min(tHalfW(a) + r - Math.abs(ox * cs - oz * sn), a.spec.len / 2 + r - Math.abs(ox * sn + oz * cs));
+}
+const _jc = { x: 0, z: 0, tx: 1, tz: 0 };
+const crossC = (fam, k, s) => { roadCenter(fam, k, s, _jc); return fam & 1 ? _jc.x : _jc.z; }; // centre line's cross coordinate at s
+function junction(a) {
+  const of = a.fam ^ 1, k0 = Math.round(a.s / G1);
+  let best = null;
+  for (let ko = k0 - 1; ko <= k0 + 1; ko++) {
+    let sc = ko * G1; for (let n = 0; n < 5; n++) sc = crossC(of, ko, crossC(a.fam, a.k, sc)); // warps are gentle, so this converges
+    roadCenter(a.fam, a.k, sc, _jc); const tx = _jc.tx, tz = _jc.tz;
+    roadCenter(of, ko, a.fam & 1 ? _jc.x : _jc.z, _jc);
+    const E = (HALF + 3) / Math.max(0.3, Math.abs(tx * _jc.tz - tz * _jc.tx)) + 1, d = (sc - a.s) * a.dir;
+    if (d > -(E + a.spec.len / 2) && (!best || d < best.d)) best = { d, E, key: a.fam ? ko + ',' + a.k : a.k + ',' + ko };
+  }
+  return best;
+}
 const _tfr = new THREE.Frustum(), _tsp = new THREE.Sphere(), _tv = new THREE.Vector3(), _tpm = new THREE.Matrix4();
+let trafficT = 0; // traffic clock, for first-come order at crossings
 function updateTraffic(dt) {
   const p = playerXZ();
+  trafficT += dt;
   _tfr.setFromProjectionMatrix(_tpm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   const pc = G.mode === 'drive' && VEH.form === 'car';
   for (let i = 0; i < traffic.length; i++) {
     const a = traffic[i];
     if (a.hidden || Math.hypot(a.x - p.x, a.z - p.z) > 520) {
       if (!spawnOnRoad(a, [0, 1], trafficInit ? 260 : 40, 480, (a) => -a.dir * 3.3)) continue;
-      a.speed = a.v = rr(...a.spec.speed); a._p = false; a.latT = a.lat; a.turnU = -1;
+      a.speed = a.v = rr(...a.spec.speed); a._p = false; a.latT = a.lat; a.turnU = -1; a.jKey = a.jWait = null;
       placeOnRoad(a);
       // never spawn inside another vehicle
       if (traffic.some((b) => b !== a && !b.hidden && tHit(a, 4, b, 0))) { a.hidden = true; continue; }
@@ -2056,10 +2080,30 @@ function updateTraffic(dt) {
         if ((bInMine && (!aInHis || j < i)) || (!aInHis && j < i && tHit(a, look, b, lb))) { want = 0; a.why = 'cross ' + j; }
       }
     }
+    // stop for a pedestrian crossing in front
+    for (const b of peds) {
+      if (b.hidden || Math.abs(b.x - a.x) > 20 || Math.abs(b.z - a.z) > 20) continue;
+      const ox = b.x - a.x, oz = b.z - a.z, lz = ox * fx + oz * fz, lx = ox * fz - oz * fx;
+      if (lz > 0 && lz < a.spec.len / 2 + look && Math.abs(lx) < tHalfW(a) + 0.5) { want = 0; a.why = 'pedestrian'; break; }
+    }
+    // junction right-of-way: only one road family at a time inside a crossing, so four cars can never each
+    // block the next one round the box (pairwise rules alone let that happen). A car holds the crossing from
+    // its stop line until its rear has left it. First come goes first: a car also waits for a car of the other
+    // road that has waited longer, so a stream on one road cannot starve the other.
+    const J = junction(a), E = J.E, front = J.d - a.spec.len / 2;
+    if (a.jKey && a.jKey !== J.key) a.jKey = null; // the held crossing is behind now
+    if (a.jKey !== J.key && front < E + look) {
+      if (a.jWait !== J.key) { a.jWait = J.key; a.jSince = trafficT; }
+      a.jWaitT = trafficT;
+      const h = front < E ? -1 : traffic.findIndex((b) => !b.hidden && b.fam !== a.fam
+        && (b.jKey === J.key || (b.jWait === J.key && b.jSince < a.jSince && b.jWaitT > trafficT - 0.1)));
+      if (h < 0) { a.jKey = J.key; a.jWait = null; } // free, or already inside it (spawned there)
+      else { want = 0; a.why = 'junction ' + h; }
+    }
     a.speed = lerp(a.speed, want, 1 - Math.exp(-(want < a.speed ? 5 : 3) * dt));
     if (want === 0 && a.speed < 0.3) a.speed = 0;
     // ponytail: gridlock breaker. A car stuck 8 s that the camera does not see (or more than 120 m away) is removed
-    // and respawns elsewhere, so no one sees it vanish; a jam in view stays. Upgrade path: junction right-of-way rules.
+    // and respawns elsewhere, so no one sees it vanish; a jam in view stays (junction right-of-way above prevents the crossing deadlock).
     a.stopT = a.speed < 0.3 ? (a.stopT || 0) + dt : 0;
     if (a.stopT > 8 && a.why !== 'player' && (Math.hypot(a.x - p.x, a.z - p.z) > 120 || !_tfr.intersectsSphere(_tsp.set(_tv.set(a.x, a.y + 1.5, a.z), a.spec.len / 2 + 1)))) { a.hidden = true; a.stopT = 0; continue; }
     const ps = a.s, pl = a.lat, px = a.x, pz = a.z, py = a.yaw, pY = a.y, pu = a.turnU;
@@ -2140,15 +2184,18 @@ function updatePeds(dt) {
     const a = peds[i];
     if (a.hidden || Math.hypot(a.x - p.x, a.z - p.z) > 330) {
       if (!spawnOnRoad(a, [0, 1, 2, 3], trafficInit ? 120 : 15, 300, (a) => (rand() < 0.5 ? -1 : 1) * (famHalf(a.fam) + 0.6), true)) continue; // inside the lamp line (half + 1.4)
-      a.v = rr(1.1, 2.0); a.down = 0;
+      a.v = rr(1.1, 2.0); a.down = 0; a.side = Math.sign(a.lat);
       placeOnRoad(a);
+      if (peds.some((b) => b !== a && !b.hidden && Math.hypot(b.x - a.x, b.z - a.z) < 0.6)) { a.hidden = true; continue; } // not on top of another walker
     }
     if (a.down > 0) {
       a.down -= dt;
       a.pitch = Math.min(Math.PI / 2, (a.pitch || 0) + dt * 6) * (a.down > 0.4 ? 1 : a.down / 0.4);
       if (a.down <= 0) a.pitch = 0;
     } else {
-      const ps = a.s;
+      const ps = a.s; a.px = a.x; a.pz = a.z;
+      // walkers going one way keep 0.6 m nearer the road than walkers going the other way, so they pass, not meet
+      a.lat = a.side * (famHalf(a.fam) + (a.dir > 0 ? 0.05 : 0.65));
       a.s += a.dir * a.v * dt; a.phase += dt * a.v * 4.2;
       a.checkT -= dt;
       if (a.checkT <= 0) {
@@ -2160,6 +2207,14 @@ function updatePeds(dt) {
       // a fence, rock or tree on the path: turn round instead of walking through it
       _wp.x = a.x; _wp.z = a.z; _wp.y = a.y;
       if (collide(_wp, 0.3)) { a.s = ps; a.dir = -a.dir; placeOnRoad(a); }
+      // never step further into another walker (wait behind a slower one) or into a car: undo the step. Two walkers
+      // that block each other (meeting at a corner) for 1.5 s: this one turns round
+      else if (peds.some((b) => b !== a && !b.hidden && !(b.down > 0) && Math.abs(b.x - a.x) < 0.6 && Math.abs(b.z - a.z) < 0.6
+          && Math.hypot(b.x - a.x, b.z - a.z) < 0.6 && Math.hypot(b.x - a.x, b.z - a.z) < Math.hypot(b.x - a.px, b.z - a.pz))
+        || traffic.some((b) => !b.hidden && Math.abs(b.x - a.x) < 8 && Math.abs(b.z - a.z) < 8 && carDepth(b, a.x, a.z, 0.3) > 0)) {
+        a.s = ps; placeOnRoad(a);
+        if ((a.waitT = (a.waitT || 0) + dt) > 1.5) { a.dir = -a.dir; a.waitT = 0; }
+      } else a.waitT = 0;
       if (car && Math.hypot(VEH.pos.x - a.x, VEH.pos.z - a.z) < 2.2) { a.down = 3; a.pitch = 0; burst(a.x, a.y + 1.5, a.z); if (window.__sfx) window.__sfx('boing'); }
     }
   }
@@ -2238,17 +2293,60 @@ const whaleCrowd = new Crowd(WHALE_PARTS, 4);
 const whales = [];
 for (let i = 0; i < 3; i++) whales.push({ x: 0, y: -1e4, z: 0, hidden: true, size: rr(1.4, 1.8), phase: rand() * 6, yaw: 0, speed: rr(2.5, 4), col: pick([PAL.denim, 0x5f6f8a, PAL.charcoal]) });
 
-function seaSpot(near, far, minDepth) {
+// body = the new animal's radius: the spot must be clear of every other sea animal, or it would appear inside one
+const crowded = (x, z, body) => SWIM.some(([, list, r]) => list.some((b) => !b.hidden && Math.hypot(b.x - x, b.z - z) < body + r * (b.size || 1)));
+function seaSpot(near, far, minDepth, body = 0) {
   const p = playerXZ();
   for (let t = 0; t < 4; t++) {
     const a = rand() * 6.283, r = rr(near, far), x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
     const g = heightAt(x, z);
-    if (g < minDepth) return { x, z, g };
+    if (g < minDepth && !(body && crowded(x, z, body))) return { x, z, g };
   }
   return null;
 }
+// sea animals are solid to each other and to you: push overlapping pairs apart before each animal moves, so its own
+// floor, surface and rock rules still have the last word. ponytail: all pairs over ~85 bodies (fish excluded: schools
+// stay in formation); a grid if the counts grow
+// Each body is an upright cylinder: name, list, radius, bottom and top relative to y (all times size). physics-check.js
+// reads this same table. A jellyfish's tentacles hang 2.8 x size under the bell; a flat ray gliding over a crab is clear.
+// The last number is a vertical gap (m): the push starts that far before two bodies touch, because a body that climbs
+// or drops onto another one (a ray follows the floor at up to 10 m/s) would otherwise meet it already deep inside
+const SWIM = [['whales', whales, 3.5, -3.1, 3, 0.5], ['sea turtles', nturtles, 0.9, -0.6, 0.6, 0.5], ['rays', rays, 1.5, -0.3, 0.3, 1.5], ['jellyfish', jellies, 1.1, -2.8, 0.8, 0.5], ['crabs', crabs, 0.8, 0, 0.6, 0.5]];
+function nudge(a, x, z) {
+  if (a.cx !== undefined) { a.cx += x; a.cz += z; } // a ray glides a circle round (cx, cz)
+  a.x += x; a.z += z;
+}
+// push sideways only: the floor and surface rules set y again each frame, so a vertical push would be undone.
+// A and B are [body, radius, bottom, top, gap, max push a frame]; wa = the share of the push A takes (1 when B is you).
+// Max 0.3 m a frame, so an overlap opens smoothly; no max for an animal that just appeared (far off, in the fog)
+function unstack(A, B, wa) {
+  const [a, ra, la, ha, pa, ca] = A, [b, rb, lb, hb, pb, cb] = B;
+  const dx = b.x - a.x, dz = b.z - a.z, m = ra + rb;
+  if (Math.abs(dx) > m || Math.abs(dz) > m) return;
+  if (Math.min(a.y + ha, b.y + hb) + pa + pb <= Math.max(a.y + la, b.y + lb)) return; // one passes over the other
+  const d = Math.hypot(dx, dz); if (d >= m) return;
+  const k = Math.min(m - d, Math.max(ca, cb)), ux = d > 1e-4 ? dx / d : 1, uz = d > 1e-4 ? dz / d : 0;
+  nudge(a, -ux * k * wa, -uz * k * wa); if (wa < 1) nudge(b, ux * k * (1 - wa), uz * k * (1 - wa));
+}
+function separateSwimmers() {
+  const L = [];
+  for (const [, list, r, lo, hi, pad] of SWIM) for (const a of list) if (!a.hidden) {
+    const s = a.size || 1, moved = !(Math.abs(a.x - a.lx) < 3 && Math.abs(a.z - a.lz) < 3); // more than 3 m since last frame = respawned
+    L.push([a, r * s, lo * s, hi * s, pad, moved ? Infinity : 0.3, list]); a.lx = a.x; a.lz = a.z;
+  }
+  const me = G.mode === 'turtle' ? TURT : G.mode === 'drive' && VEH.form === 'sub' ? VEH : null;
+  const M = me && (G.mode === 'turtle' ? [me.pos, 1.5, -1, 1, 0, 0.3] : [me.pos, 2.2, -1.4, 1.4, 0, 0.3]);
+  for (let i = 0; i < L.length; i++) {
+    for (let j = i + 1; j < L.length; j++) {
+      const la = L[i][6], lb = L[j][6];
+      if (!(la === rays && lb === crabs || la === crabs && lb === rays)) unstack(L[i], L[j], 0.5); // a ray lifts over a crab instead
+    }
+    if (me) unstack(L[i], M, 1); // you do not move; the animal gets out of the way
+  }
+}
 function updateSea(dt) {
   const p = playerXZ();
+  separateSwimmers();
   const nearSea = p.y < WATER_Y + 40;
   // spawn height near the player, so animals share the depth you swim at
   const nearY = (g, pad) => clamp(p.y + rr(-12, 12), g + pad, WATER_Y - pad);
@@ -2292,13 +2390,14 @@ function updateSea(dt) {
   for (const j of jellies) {
     if (j.hidden || Math.hypot(j.x - p.x, j.z - p.z) > 120) {
       j.hidden = true;
-      const s = nearSea && seaSpot(10, 90, -15);
+      const s = nearSea && seaSpot(10, 90, -15, 1.1 * j.size);
       if (!s) continue;
       j.x = s.x; j.z = s.z; j.base = nearY(s.g, 2.8 * j.size + 2); j.y = j.base; j.hidden = false; // tentacles reach 2.8 x size below the bell
     }
     j.phase += dt * 2.2;
     j.y = j.base + Math.sin(j.phase * 0.5) * 1.5; j.x += Math.sin(U.uTime.value * 0.1 + j.base) * 0.3 * dt;
     j.y = Math.max(j.y, groundAt(j.x, j.z) + 2.8 * j.size + 0.3); // drifting over a rising floor
+    if (j.y + 0.8 * j.size > WATER_Y) j.hidden = true; // pushed into water too shallow for it: it comes back elsewhere
   }
   jellyCrowd.sync(jellies);
   for (const r of rays) {
@@ -2310,21 +2409,30 @@ function updateSea(dt) {
       // the whole circle it glides must be deep water, or it would glide over a shore
       let deep = true;
       for (let k = 0; k < 8 && deep; k++) deep = heightAt(r.cx + Math.cos(k * 0.785) * r.r, r.cz + Math.sin(k * 0.785) * r.r) < WATER_Y - 12;
-      if (!deep) continue;
+      if (!deep || crowded(r.cx + Math.cos(r.ang) * r.r, r.cz + Math.sin(r.ang) * r.r, 1.5 * r.size)) continue;
       r.hidden = false;
     }
     r.ang += r.w * dt; r.phase += dt * 2.5;
     r.x = r.cx + Math.cos(r.ang) * r.r; r.z = r.cz + Math.sin(r.ang) * r.r;
-    const rg = groundAt(r.x, r.z);
-    r.y = Math.max(Math.min(rg + 6, WATER_Y - 3), rg + 0.3 * r.size + 0.4); // glide 6 m up, never into the floor
-    _wp.x = r.x; _wp.z = r.z; _wp.y = r.y; if (collide(_wp, 1.5 * r.size, 0.3 * r.size, 0.6 * r.size)) { r.x = _wp.x; r.z = _wp.z; } // slide round a tall rock
+    const rg = groundAt(r.x, r.z), wing = 1.5 * r.size;
+    const rgw = Math.max(rg, groundAt(r.x + wing, r.z), groundAt(r.x - wing, r.z), groundAt(r.x, r.z + wing), groundAt(r.x, r.z - wing));
+    r.y = Math.max(Math.min(rg + 6, WATER_Y - 3), rgw + 0.3 * r.size + 2); // glide 6 m up; never lower than 2 m (a big crab's back) over the floor under the wings
+    for (const c of crabs) if (!c.hidden && Math.hypot(c.x - r.x, c.z - r.z) < 1.5 * r.size + 0.8 * c.size) r.y = Math.max(r.y, c.y + 0.6 * c.size + 0.3 * r.size + 0.1); // lift over a crab on a bump
+    // slide round a tall rock (move the circle too, or the ray is back inside next frame). A ray that sinks onto the top
+    // of a rock or the wreck it glides over would be pushed out sideways by metres in one frame: lift it over instead
+    _wp.x = r.x; _wp.z = r.z; _wp.y = r.y;
+    if (collide(_wp, 1.5 * r.size, 0.3 * r.size, 0.6 * r.size)) {
+      let up = 0;
+      if (Math.hypot(_wp.x - r.x, _wp.z - r.z) > 0.5) for (up = 0.5; up <= 8; up += 0.5) { _wp.x = r.x; _wp.z = r.z; _wp.y = r.y + up; if (!collide(_wp, 1.5 * r.size, 0.3 * r.size, 0.6 * r.size)) break; }
+      if (up && up <= 8) r.y += up; else nudge(r, _wp.x - r.x, _wp.z - r.z);
+    }
     r.yaw = Math.atan2(-Math.sin(r.ang) * Math.sign(r.w), Math.cos(r.ang) * Math.sign(r.w));
   }
   rayCrowd.sync(rays);
   for (const t of nturtles) {
     if (t.hidden || Math.hypot(t.x - p.x, t.z - p.z) > 120) {
       t.hidden = true;
-      const s = nearSea && seaSpot(10, 90, -10);
+      const s = nearSea && seaSpot(10, 90, -10, 0.9 * t.size);
       if (!s) continue;
       t.x = s.x; t.z = s.z; t.y = nearY(s.g, 5); t.yaw = rand() * 6; t.hidden = false;
     }
@@ -2339,7 +2447,7 @@ function updateSea(dt) {
   for (const c of crabs) {
     if (c.hidden || Math.hypot(c.x - p.x, c.z - p.z) > 110) {
       c.hidden = true;
-      const s = nearSea && seaSpot(8, 90, -6);
+      const s = nearSea && seaSpot(8, 90, -6, 0.8 * c.size);
       if (!s) continue;
       _wp.x = s.x; _wp.z = s.z; _wp.y = s.g; if (collide(_wp, 0.8 * c.size)) continue; // not inside a rock
       c.x = s.x; c.z = s.z; c.yaw = rand() * 6; c.hidden = false;
@@ -2358,7 +2466,7 @@ function updateSea(dt) {
   for (const w of whales) {
     if (w.hidden || Math.hypot(w.x - p.x, w.z - p.z) > 220) {
       w.hidden = true;
-      const s = nearSea && seaSpot(40, 150, -40);
+      const s = nearSea && seaSpot(40, 150, -40, 3.5 * w.size);
       if (!s) continue;
       w.x = s.x; w.z = s.z; w.y = nearY(s.g, 14); w.yaw = rand() * 6; w.hidden = false;
     }
@@ -2368,7 +2476,10 @@ function updateSea(dt) {
     w.x += Math.sin(w.yaw) * w.speed * dt; w.z += Math.cos(w.yaw) * w.speed * dt;
     // the shipwreck and tall rocks are solid: push the body out and turn away
     _wp.x = w.x; _wp.z = w.z; _wp.y = w.y; if (collide(_wp, 3.5 * w.size, 3.1 * w.size)) { w.x = _wp.x; w.z = _wp.z; w.yaw += dt * 1.5; }
-    w.y = clamp(w.y, heightAt(w.x, w.z) + 12, WATER_Y - 8);
+    // the body is long (nose and tail 9 x size from the middle): on a slope keep both ends clear of the floor too
+    const fx = Math.sin(w.yaw) * 9 * w.size, fz = Math.cos(w.yaw) * 9 * w.size;
+    const floor = Math.max(groundAt(w.x, w.z) + 12, groundAt(w.x + fx, w.z + fz) + 2 * w.size, groundAt(w.x - fx, w.z - fz) + 2 * w.size);
+    w.y = clamp(w.y, floor, WATER_Y - 8);
   }
   whaleCrowd.sync(whales);
 }
@@ -2410,6 +2521,16 @@ function landSpot(near, far, test) {
   return null;
 }
 const _wp = { x: 0, y: 0, z: 0 };
+// would a step to (nx, nz) take animal a (radius rad) further into another sheep or rabbit? Stepping away is allowed,
+// so two that spawned touching can still part
+function bumpsAnimal(a, nx, nz, rad) {
+  for (const [list, rb] of [[sheep, 1.1], [rabbits, 0.4]]) for (const b of list) {
+    if (b === a || b.hidden || Math.abs(b.x - nx) > 3 || Math.abs(b.z - nz) > 3) continue;
+    const d = Math.hypot(b.x - nx, b.z - nz);
+    if (d < rad + rb && d < Math.hypot(b.x - a.x, b.z - a.z)) return true;
+  }
+  return false;
+}
 function wander(a, dt, speed, hop, rad, tall) {
   // props appear when a chunk gets its full detail: an animal standing where a tree appears is pushed out
   _wp.x = a.x; _wp.z = a.z; _wp.y = a.y;
@@ -2424,7 +2545,7 @@ function wander(a, dt, speed, hop, rad, tall) {
     const nx = a.x + Math.sin(a.yaw) * speed * dt, nz = a.z + Math.cos(a.yaw) * speed * dt;
     _wp.x = nx; _wp.z = nz; _wp.y = a.y;
     // walk on only over dry land, off the road, and not into a tree, rock, fence, lamp or house
-    if (heightAt(nx, nz) > 3 && !onRoad(nx, nz) && !collide(_wp, rad, 0, tall)) { a.x = nx; a.z = nz; } else a.yaw += 2;
+    if (heightAt(nx, nz) > 3 && !onRoad(nx, nz) && !collide(_wp, rad, 0, tall) && !bumpsAnimal(a, nx, nz, rad)) { a.x = nx; a.z = nz; } else a.yaw += 2;
     a.phase += dt * speed * 5;
   }
   a.y = groundAt(a.x, a.z) + (hop && a.moving ? Math.abs(Math.sin(a.phase)) * 0.6 : 0);
@@ -2561,7 +2682,7 @@ MODES.bird = (dt) => {
   birdModel.rotation.set(-b.pitch, b.heading, b.roll, 'YXZ');
   birdModel.wings[0].rotation.z = wf; birdModel.wings[1].rotation.z = -wf;
 };
-Object.assign(window.__game, { traffic, peds, schools, fish, jellies, rays, nturtles, crabs, whales, sheep, rabbits });
+Object.assign(window.__game, { traffic, peds, schools, fish, jellies, rays, nturtles, crabs, whales, sheep, rabbits, SWIM });
 
 // ============================================================ felt clouds
 const CLOUD_N = 24, PUFFS = 5;

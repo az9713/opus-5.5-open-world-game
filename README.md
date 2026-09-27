@@ -89,9 +89,13 @@ Then open `http://localhost:8431/`. Opening `index.html` as a `file://` URL does
    ```js
    console.table(await m.faults());
    ```
-6. Run a 40 s traffic soak:
+6. Run a 90 s traffic soak. `overlaps` and `deadlocks` must be 0:
    ```js
    m.soak('town');
+   ```
+7. Check that moving things do not pass through each other (cars, walkers, sheep, rabbits, sea animals, the submarine). Every `bad` must be 0:
+   ```js
+   for (const b of ['town', 'field', 'sea']) console.table(m.overlaps(b));
    ```
 
 What the test covers, the results, and what is **not** tested are in [`tech-stack.html`](tech-stack.html).

@@ -273,18 +273,28 @@ export async function run() {
 }
 
 // ---- traffic soak: drive the traffic for `frames` steps; count vehicles inside each other, cars stopped > 20 s,
-// and U-turns (started, finished, longer than 10 s)
-export function soak(biome, frames = 2400) {
+// U-turns (started, finished, longer than 10 s), and deadlocks (distinct wait-for cycles; must be 0)
+export function soak(biome, frames = 5400) {
   const t = g.traffic, p = g.findBiome(biome, 0.6);
   toCar(p.x + 300, p.z + 300, 0); g.step(1 / 60, 30);
   let pairs = 0, overlaps = 0, turns = 0, turned = 0, longTurns = 0;
-  const still = new Map(), turning = new Map();
+  const still = new Map(), turning = new Map(), cycles = new Set();
   for (let f = 0; f < frames; f += 10) {
     g.step(1 / 60, 10); g.camera.updateMatrixWorld(); // a hidden tab does not render, so keep the camera matrices current
     for (let i = 0; i < t.length; i++) for (let j = i + 1; j < t.length; j++) {
       const a = t[i], b = t[j];
       if (a.hidden || b.hidden || Math.abs(a.x - b.x) > 14 || Math.abs(a.z - b.z) > 14 || Math.abs(a.y - b.y) > 3) continue;
       pairs++; if (obbOverlap(a, b)) overlaps++;
+    }
+    // deadlock: follow each stopped car's reason ("follow 12", "cross 7", "junction 3", "blocked 5") to the car it waits
+    // for; coming back round to a car already on the path is a cycle that no rule can clear
+    for (const a of t) {
+      if (a.hidden || a.speed >= 0.3) continue;
+      const path = []; let c = a;
+      while (c && !path.includes(c)) { path.push(c); const m = /\d+/.exec(c.why || ''); c = m && t[+m[0]]; }
+      const cyc = c ? path.slice(path.indexOf(c)) : [];
+      // a car in a U-turn arc still moves, so a cycle through it clears by itself
+      if (cyc.length && cyc.every((x) => x.speed < 0.3 && !(x.turnU >= 0))) cycles.add(cyc.map((x) => t.indexOf(x)).sort((x, y) => x - y).join(' '));
     }
     for (const a of t) {
       still.set(a, !a.hidden && a.speed < 0.3 ? (still.get(a) || 0) + 10 : 0);
@@ -296,7 +306,7 @@ export function soak(biome, frames = 2400) {
   }
   let stuck = 0; const why = {};
   for (const [a, n] of still) if (n >= 1200) { stuck++; const w = (a.why || 'none').split(' ')[0] + (Math.hypot(a.x - g.VEH.pos.x, a.z - g.VEH.pos.z) < 120 ? ' near player' : ' far'); why[w] = (why[w] || 0) + 1; }
-  return { biome, seconds: frames / 60, closePairs: pairs, overlaps, stoppedOver20s: stuck, stoppedWhy: JSON.stringify(why), uTurnsStarted: turns, uTurnsFinished: turned, uTurnsOver10s: longTurns };
+  return { biome, seconds: frames / 60, closePairs: pairs, overlaps, stoppedOver20s: stuck, stoppedWhy: JSON.stringify(why), deadlocks: cycles.size, uTurnsStarted: turns, uTurnsFinished: turned, uTurnsOver10s: longTurns };
 }
 
 // ---- fault injection: break the physics on purpose; each check must go red (proves no check is tautological)
@@ -327,4 +337,47 @@ export async function faults() {
   if (wh) { const wy = wh.y; wh.y = drawnGround(wh.x, wh.z); checkSea('fault'); caught('whale dropped onto the sea floor', 'fault whales above sea floor'); wh.y = wy; }
   else out.push({ injection: 'whale dropped onto the sea floor', caught: 'no whale in view' });
   return out;
+}
+
+// ---- body against body: moving things must not pass through each other. Samples every 0.5 s for `secs` in one place
+// (town, field or sea) and counts pairs more than 0.3 m inside each other. Every `bad` must be 0.
+export function overlaps(biome, secs = 20) {
+  const vis = (l) => l.filter((a) => !a.hidden), hw = (a) => (a.spec.len > 8 ? 1.45 : 1.15);
+  const inCar = (a, x, z, r) => { const ox = x - a.x, oz = z - a.z, cs = Math.cos(a.yaw), sn = Math.sin(a.yaw); return Math.min(hw(a) + r - Math.abs(ox * cs - oz * sn), a.spec.len / 2 + r - Math.abs(ox * sn + oz * cs)); };
+  const R = {}, hit = (k, d, a) => { const r = R[k] || (R[k] = { pair: k, n: 0, bad: 0, worst: 0, at: '' }); r.n++; if (d > 0.3) { r.bad++; if (d > r.worst) { r.worst = +d.toFixed(2); r.at = at(a); } } };
+  const p = biome === 'sea' ? g.findSea(-60) : g.findBiome(biome, 0.6);
+  toCar(p.x, p.z, 0); if (biome === 'sea') { g.VEH.form = 'sub'; g.VEH.pos.y = -20; } g.step(1 / 60, 90);
+  const pairs = (L, r, k) => { for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) { const a = L[i], b = L[j]; if (Math.abs(a.x - b.x) < 2 * r && Math.abs(a.z - b.z) < 2 * r) hit(k, 2 * r - Math.hypot(a.x - b.x, a.z - b.z), a); } };
+  for (let f = 0; f < secs * 60; f += 30) {
+    g.step(1 / 60, 30);
+    const t = vis(g.traffic), peds = vis(g.peds).filter((a) => !(a.down > 0));
+    for (const a of t) {
+      // the whole car body (circles along its length), not only its middle, against trees, lamps and houses
+      const n = Math.max(2, Math.ceil(a.spec.len / (2 * hw(a)))), half = a.spec.len / 2 - hw(a); let w = -9;
+      for (let i = 0; i <= n; i++) { const k = -half + 2 * half * i / n; w = Math.max(w, depthIn(a.x + Math.sin(a.yaw) * k, a.z + Math.cos(a.yaw) * k, hw(a), false, a.y, 2)); }
+      hit('traffic body vs trees/lamps/houses', w, a);
+      for (const b of peds) if (Math.abs(b.x - a.x) < 8 && Math.abs(b.z - a.z) < 8) hit('traffic vs pedestrians', inCar(a, b.x, b.z, 0.3), b);
+      for (const b of vis(g.sheep)) if (Math.abs(b.x - a.x) < 9 && Math.abs(b.z - a.z) < 9) hit('traffic vs sheep', inCar(a, b.x, b.z, 1.1), b);
+    }
+    pairs(peds, 0.3, 'pedestrian vs pedestrian'); pairs(vis(g.sheep), 1.1, 'sheep vs sheep'); pairs(vis(g.rabbits), 0.4, 'rabbit vs rabbit');
+    if (biome !== 'sea') continue;
+    // each body is an upright cylinder, from the game's own table: name, list, radius, bottom and top relative to its y
+    // (all times size). A flat ray gliding over a crab is clear; a sphere model would call that an overlap
+    const S = g.SWIM;
+    const cyl = (a, r, lo, hi, b, r2, lo2, hi2) => Math.min(r + r2 - Math.hypot(a.x - b.x, a.z - b.z), Math.min(a.y + hi, b.y + hi2) - Math.max(a.y + lo, b.y + lo2));
+    const sub = { x: g.VEH.pos.x, y: g.VEH.pos.y, z: g.VEH.pos.z };
+    for (let i = 0; i < S.length; i++) {
+      const [na, LA, ra, la, ha] = S[i];
+      for (const a of vis(LA)) { const s = a.size || 1; if (Math.abs(a.x - sub.x) < 20 && Math.abs(a.z - sub.z) < 20) hit(`submarine vs ${na}`, cyl(a, ra * s, la * s, ha * s, sub, 2.2, -1.4, 1.4), a); }
+      for (let j = i; j < S.length; j++) {
+        const [nb, LB, rb, lb, hb] = S[j], A = vis(LA), B = vis(LB);
+        for (let x = 0; x < A.length; x++) for (let y = i === j ? x + 1 : 0; y < B.length; y++) {
+          const a = A[x], b = B[y], sa = a.size || 1, sb = b.size || 1;
+          if (Math.abs(a.x - b.x) > (ra * sa + rb * sb) + 2 || Math.abs(a.z - b.z) > (ra * sa + rb * sb) + 2) continue;
+          hit(`${na} vs ${nb}`, cyl(a, ra * sa, la * sa, ha * sa, b, rb * sb, lb * sb, hb * sb), a);
+        }
+      }
+    }
+  }
+  return Object.values(R);
 }
