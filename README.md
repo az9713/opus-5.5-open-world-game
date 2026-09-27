@@ -103,3 +103,7 @@ What the test covers, the results, and what is **not** tested are in [`tech-stac
 | `feltworld/index.html` | The whole game: 3,110 lines, HTML + CSS + one JavaScript module |
 | `feltworld/physics-check.js` | The in-browser physics test |
 | `tech-stack.html` | Tech stack, physics design, and the test report |
+
+## License
+
+[MIT](LICENSE)
