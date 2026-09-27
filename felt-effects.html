@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Felt World Effects</title>
+<style>
+  :root { --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --text2: #cbd5e1; --muted: #94a3b8; --orange: #fb923c; --teal: #2dd4bf; --line: #334155; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text2); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { color: var(--text); font-size: 2rem; margin: 0 0 4px; }
+  h2 { color: var(--orange); font-size: 1.35rem; margin: 40px 0 12px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  h3 { color: var(--teal); font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--teal); }
+  code { background: var(--card); color: var(--text); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+  pre { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: .85rem; line-height: 1.45; }
+  pre code { padding: 0; background: none; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin: 16px 0; }
+  .wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: .95rem; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--card); color: var(--text); }
+  .num { font-variant-numeric: tabular-nums; }
+  .src { color: var(--muted); font-size: .9rem; }
+  ol.pipe li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Felt World — how the felt look is made</h1>
+<p class="lead">The code that makes the game look like felt, wool, knitting and stitches. The game has no image files. Every texture is drawn with code when the page starts. <a href="feltworld/">Play the game</a> · <a href="tech-stack.html">Tech stack and tests</a> · <a href="https://github.com/az9713/opus-5.5-open-world-game">Source on GitHub</a></p>
+
+<div class="card">
+<p><strong>In short:</strong> the felt look comes from seven small layers. Each layer copies one thing you see on a real felt model: soft colour, fibres, flat light bands, quilt seams, knitted stitches, thread outlines, and a fuzzy edge.</p>
+<p class="src">All code is in <code>feltworld/index.html</code>. Line links go to commit <code>92ab92f</code>. The library is three.js 0.170.0.</p>
+</div>
+
+<h2>1. The seven layers, in the order of one frame</h2>
+<ol class="pipe">
+<li><strong>Wool palette and soft light.</strong> Muted dyed-wool colours, a warm sky light and a warm sun, with tone mapping off.</li>
+<li><strong>Felt texture.</strong> A picture of 5,200 short fibres, drawn on a canvas, on almost every surface.</li>
+<li><strong>Toon ramp.</strong> Light falls in 4 flat bands, not in a smooth gradient.</li>
+<li><strong>Patterns in the shaders.</strong> Quilt squares with stitched seams on fields, knit rows on mountains, stitched ripples on the water, light patterns on the sea floor.</li>
+<li><strong>Knitted road texture.</strong> Rows of V stitches with a stitched centre line.</li>
+<li><strong>Running-stitch outlines.</strong> A dark thread line round each object, cut into dashes.</li>
+<li><strong>The felt pass (post-process).</strong> After the 3D scene is drawn, one more shader blurs the edges into fibres, adds felt grain and seams, and sews a fabric border round the screen.</li>
+</ol>
+<p>A <em>shader</em> is a small program that runs on the graphics card. It computes the colour of each pixel. The layers 3, 4, 6 and 7 are shader code. The layers 2 and 5 are canvas drawings. Layer 1 is settings.</p>
+
+<h2>2. Wool palette and soft light</h2>
+<p>All colours come from one table, <code>PAL</code> (<a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L353">line 353</a>). The table has 21 colours with low saturation, for example oat <code>#d9c9a8</code>, mustard <code>#d4a636</code>, sage <code>#9caf88</code>, terra <code>#c46a4a</code>. The outline colour is <code>thread</code>, <code>#5a3e36</code>, a dark brown. Houses, trees and coral pick from short lists of these colours.</p>
+<ul>
+<li><strong>Light.</strong> A hemisphere light (cream <code>#fff2dc</code> from above, brown <code>#8a6e58</code> from below, strength 1.4) and a warm sun (<code>#fff0d8</code>, strength 2.2). The brown light from below keeps shadows warm, like dyed wool in a room.</li>
+<li><strong>No tone mapping.</strong> <code>renderer.toneMapping = THREE.NoToneMapping</code>. Tone mapping would push colours toward photo contrast. Without it, the palette stays as chosen.</li>
+<li><strong>Fog.</strong> The fog colour and the background colour are the same (<code>#cfe0dc</code> by day). Far objects fade into a pale haze. Low quality starts the fog end at 700 m, Medium at 900 m, High at 1,150 m.</li>
+<li><strong>No antialiasing.</strong> The renderer has <code>antialias: false</code>. The felt pass in layer 7 breaks every edge into fibres, so sharp edges do not show.</li>
+</ul>
+
+<h2>3. The felt texture (drawn on a canvas)</h2>
+<p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L406">Line 406</a></p>
+<p>At start, the code draws a 256 × 256 pixel picture on a hidden 2D canvas. It fills the picture with a pale grey <code>#e9e4dc</code>. Then it draws 5,200 short, curved strokes in random places and directions:</p>
+<pre><code>for (let i = 0; i &lt; 5200; i++) {
+  const x = texRand() * w, y = texRand() * h, a = texRand() * Math.PI * 2, l = 2 + texRand() * 7;
+  const v = texRand() &lt; 0.5 ? 255 : 170 + texRand() * 40;          // half light, half darker
+  g.strokeStyle = `rgba(${v},${v - 4},${v - 10},${0.18 + texRand() * 0.25})`;
+  g.lineWidth = 0.6 + texRand() * 0.8;
+  g.beginPath(); g.moveTo(x, y);
+  g.quadraticCurveTo(/* a bend at the middle */ ..., x + Math.cos(a) * l, y + Math.sin(a) * l);
+  g.stroke();
+}</code></pre>
+<ul>
+<li>Each stroke is 2 to 9 pixels long and 0.6 to 1.4 pixels wide. A curve with one bend makes it look like a loose fibre.</li>
+<li>Half the strokes are white. The other half are grey (value 170 to 210). The colour is a little warm: red is 4 more than green and 10 more than blue.</li>
+<li>Each stroke is 18 % to 43 % opaque, so fibres cross and build up like pressed wool.</li>
+<li>The random numbers come from a seeded generator (<code>mulberry32(777)</code>), so the texture is the same at each start.</li>
+</ul>
+<p>The texture is grey. Each object multiplies it by its own colour. So one texture gives felt in all 21 palette colours. The texture repeats, and it has 4× anisotropic filtering, so fibres stay sharp on surfaces seen at a low angle.</p>
+<p>Two more canvas textures use the same method: the knitted roads (section 6) and the sewing-button face (a rim, four holes and a thread cross, <a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L438">line 438</a>).</p>
+
+<h2>4. The toon ramp: light in flat bands</h2>
+<p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L448">Line 448</a></p>
+<pre><code>const ramp = new THREE.DataTexture(new Uint8Array([110, 165, 215, 255]), 4, 1, THREE.RedFormat);
+ramp.minFilter = ramp.magFilter = THREE.NearestFilter;</code></pre>
+<p>Normal 3D light changes smoothly from bright to dark across a round surface. That looks like plastic. A felt model has soft, flat patches of light. The ramp is a picture only 4 pixels wide. three.js <code>MeshToonMaterial</code> looks up the light level in it. <code>NearestFilter</code> stops it from blending between the 4 values, so the light snaps to one of 4 levels: 43 %, 65 %, 84 % and 100 % (110, 165, 215 and 255 out of 255).</p>
+<p>The darkest band is 43 %, not black. This keeps shadowed sides soft, like light that goes through wool.</p>
+<p>Almost every material in the game is a <code>MeshToonMaterial</code> with <code>map: feltTex, gradientMap: ramp</code>: props, terrain, water, animals, cars, the player models.</p>
+
+<h2>5. Patterns in the shaders</h2>
+<p>three.js gives each material a built-in shader. The game changes that shader with <code>onBeforeCompile</code>. This hook gets the shader text before it is compiled. The game inserts its own lines at named places, for example after <code>#include &lt;color_fragment&gt;</code>. So the patterns keep all normal three.js features: lights, shadows, fog, the toon ramp.</p>
+<p>A helper, <code>addWorldPos</code> (<a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L452">line 452</a>), sends the world position of each pixel to the fragment shader. The patterns use world position, not texture coordinates. So a pattern does not stretch on a slope, and it lines up across the borders of terrain chunks.</p>
+
+<h3>5.1 Quilt squares on the fields</h3>
+<p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L484">Line 484</a></p>
+<ul>
+<li>The ground is cut into squares of 36 × 36 m. A hash of the square's grid cell picks one of 7 quilt colours.</li>
+<li><strong>Furrow rows:</strong> inside each square, stripes 3 m wide alternate between 93 % and 100 % brightness. A second hash turns the stripes along x or along z, so squares next to each other do not all match.</li>
+<li><strong>Seam:</strong> the outer 0.5 m of each square is darker, at 72 % brightness.</li>
+<li><strong>Running stitch:</strong> between 0.55 m and 1.35 m in from the edge, a cream thread (<code>vec3(0.95, 0.9, 0.8)</code>) shows as dashes. The dash repeats every 2.6 m and is on for 55 % of it.</li>
+</ul>
+<pre><code>float e = min(min(f.x, f.y), min(36.0 - f.x, 36.0 - f.y));     // distance to the nearest edge
+float stitch = step(e, 1.35) * step(0.45, fract(along / 2.6)) * step(0.55, e);
+q = mix(q, q * 0.72, step(e, 0.5));                              // darker seam
+q = mix(q, pow(vec3(0.95,0.9,0.8), vec3(2.2)), stitch);         // cream thread</code></pre>
+<p>Where the quilt shows is set per terrain vertex, in an extra attribute <code>aMat</code> (<a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L805">line 805</a>). The quilt fades in with the field mask. It is off below 3 m height and on roads. The same attribute holds a second weight for mountains.</p>
+
+<h3>5.2 Knit rows on mountains</h3>
+<p>On mountain slopes, a zig-zag pattern on height makes rows that look like knitting. The rows repeat about every 1.8 m of height (<code>vWP.y * 0.55</code>). The pattern changes brightness between 86 % and 104 %.</p>
+
+<h3>5.3 Light patterns on the sea floor</h3>
+<p>Below 1 m under the surface, two moving sine waves make thin bright lines. They copy the light patterns (caustics) that waves make on a real sea floor. The lines get weaker with depth. Below 119 m they stay at 15 % strength.</p>
+
+<h3>5.4 Stitched water</h3>
+<p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L533">Line 533</a></p>
+<p>The water is one opaque sheet of felt, 9,000 × 9,000 m, that follows the camera. It is not transparent. Two slow sine waves make curved bands. Where a band is thin, a pale thread line shows, cut into dashes. From below, the back face shows a lighter "ceiling" colour, so the surface looks like a felt sky from under the water.</p>
+
+<h3>5.5 Kelp that sways</h3>
+<p>The kelp shader moves each vertex sideways. The move grows with the square of the height, so the base stays in place and the tip moves most. Each kelp plant gets its own phase from its position, so a field of kelp does not move as one block.</p>
+
+<h2>6. The knitted roads</h2>
+<p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L417">Line 417</a></p>
+<p>A 128 × 256 pixel canvas holds 8 columns × 16 rows of V shapes, drawn with round line caps. Rows of V stitches are what a knitted scarf looks like up close. Then the code adds:</p>
+<ul>
+<li>darker bands, 10 pixels wide, at both edges;</li>
+<li>a centre line in dashes (22 pixels on, 14 off, 5 pixels wide), like a thick running stitch;</li>
+<li>a thin cream stitch line near each edge (8 on, 7 off).</li>
+</ul>
+<p>There are two versions: grey-blue roads with a mustard centre line, and pink town streets with a cream centre line.</p>
+
+<h2>7. Running-stitch outlines</h2>
+<p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L550">Line 550</a></p>
+<p>Felt toys often have a visible thread round their edges. The game makes this with an <strong>inverted hull</strong>: it draws each object a second time, a little larger, in the thread colour, and shows only the back faces. The front of the real object covers the middle of the copy. So only a thin rim of the copy shows round the edge, as an outline.</p>
+<pre><code>float _d = length(cameraPosition - _w.xyz);
+_w.xyz += _wn * (0.05 + _d * 0.0021);      // push each vertex out along its normal</code></pre>
+<ul>
+<li>The push grows with distance to the camera: 0.05 m, plus 0.0021 m for each metre. At 100 m it is 0.26 m. This keeps the line about the same width on the screen, near and far.</li>
+<li><strong>Dashes:</strong> for props that do not move, the fragment shader throws away (<code>discard</code>) part of the outline in a world-space stripe pattern. The stripes are 0.73 m apart along the direction (0.83, 0.61, 0.71). In each stripe, 58 % is kept and 42 % is thrown away. The kept parts look like a running stitch.</li>
+<li><strong>Solid for moving things.</strong> Cars, walkers and animals get a solid outline (<code>OL_SOLID</code>). The dash pattern is fixed in the world, so on a moving object the dashes would slide along its edge.</li>
+<li><strong>Cost control.</strong> The outline copy shares the object's instance matrices, so it costs no extra memory for positions. Outlines turn off past 560 m. Small props and their outlines turn off past 380 m (<a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L1297">line 1297</a>).</li>
+</ul>
+
+<h3>Why simple shapes are enough</h3>
+<p>Every prop is built from 10 simple shapes: box, icosahedron, cone, cylinder, sphere, a 4-sided roof, a rock (dodecahedron), kelp, torus and disc (<a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L578">line 578</a>). A tree is a cylinder and some icosahedrons. A house is a box and a roof. The shapes have few faces (a sphere has 14 × 10 segments, a cone 9 sides). With the felt texture, the ramp and the outline, low-detail shapes read as hand-cut felt pieces. All props in a chunk with the same shape go into one <code>InstancedMesh</code>, with one colour per instance (<code>Batch</code>, <a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L594">line 594</a>). Animals and cars use the same method (<code>Crowd</code>, <a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L1872">line 1872</a>).</p>
+
+<h2>8. The sky</h2>
+<p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L631">Line 631</a></p>
+<p>The sky is a sphere of radius 3,000 m with its own shader. The colour goes from a pale horizon (<code>#f0e2c8</code>) to a soft blue top (<code>#8cb8c8</code>). The sun is a disc with a soft glow. Two crossed sine waves change the brightness by ±3 %, which gives faint fibre streaks, as if the sky were a stretched cloth. At night, a hash on a grid of directions places stars, and each star twinkles on its own phase.</p>
+
+<h2>9. The felt pass (post-process)</h2>
+<p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L670">Line 670</a> · render order at <a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L1600">line 1600</a></p>
+<p>The game does not draw the 3D scene to the screen directly. It draws the scene into an off-screen picture (a render target with a depth texture, in half-float colour). Then it draws one rectangle over the whole screen with the felt-pass shader. That shader reads the off-screen picture and its depth, and makes the final pixels:</p>
+<pre><code>function render() {
+  renderer.setRenderTarget(rt);  renderer.render(scene, camera);          // 1. scene to a picture
+  renderer.setRenderTarget(null); renderer.render(postScene, postCam);    // 2. felt pass to the screen
+}</code></pre>
+<p>The shader does these steps, in this order:</p>
+<div class="wrap"><table>
+<tr><th>Step</th><th>What it does</th><th>Numbers</th></tr>
+<tr><td>Fibre fuzz</td><td>Moves each pixel's lookup point a little, by smooth noise plus a blocky random value. Edges break up into short fibres, like the edge of a felt piece.</td><td class="num">Up to about ±1.8 px (×2.2 px of jitter, noise −0.5 to 0.5, block value −0.3 to 0.3)</td></tr>
+<tr><td>Colour bleed</td><td>Mixes in the average of 4 neighbours, like dye that spreads into the fibres.</td><td class="num">Neighbours 2 px away, 30 % mix</td></tr>
+<tr><td>Soft seams</td><td>Finds places where depth jumps (the Laplacian of the linear depth: the 4 neighbours against the centre). It darkens them to a warm brown, like the fold where two felt pieces are sewn.</td><td class="num">Starts at 0.04, full at 0.2; fades out from 300 to 900 m; up to 55 % toward (0.62, 0.52, 0.48)</td></tr>
+<tr><td>Felt grain</td><td>Three layers of noise at different sizes change the brightness in the screen, so flat areas are never smooth.</td><td class="num">Brightness 94 % to 105 %</td></tr>
+<tr><td>Under water</td><td>A small wave moves the picture and a blue-green tint covers it.</td><td class="num">Wave 0.16 % of the screen; tint 60 %</td></tr>
+<tr><td>Vignette</td><td>Makes the corners a little darker.</td><td class="num">About 27 % darker in the corners</td></tr>
+<tr><td>Stitched border</td><td>Draws a teal fabric band round the screen, a shadow inside it, and a cream running stitch along it. The game screen looks like a felt picture sewn into a frame.</td><td class="num">Band 14 px; stitch 9 px from the screen edge, on for 55 % of every 13 px</td></tr>
+<tr><td>Fade</td><td>Mixes to the border teal for the intro and for changes of scene.</td><td class="num">—</td></tr>
+</table></div>
+<p>All pixel sizes are divided by the device pixel ratio (<code>dpr</code>). So the fibres, the grain and the border are the same size on a normal screen and on a high-density screen.</p>
+
+<h2>10. What the layers cost</h2>
+<ul>
+<li>The canvas textures are drawn once, at start. The felt texture has 5,200 strokes on 256 × 256 pixels.</li>
+<li>The inverted-hull outline draws most props twice. The distance limits (560 m for outlines, 380 m for small props) keep this down.</li>
+<li>The felt pass reads the colour picture 5 times and the depth picture 5 times for each screen pixel.</li>
+<li>The quality tiers change the pixel ratio (Low 0.75, Medium 1.0, High 1.5) and the shadows (none, 1,024 px, 2,048 px). The felt layers are the same on all tiers.</li>
+<li>No frame time was measured for each layer alone. The frame times in <a href="tech-stack.html">the tech stack page</a> are for the whole game.</li>
+</ul>
+
+<h2>11. Where to change the look</h2>
+<div class="wrap"><table>
+<tr><th>To change</th><th>Edit</th></tr>
+<tr><td>How fuzzy the felt surface is</td><td>The stroke count (5,200), length (2 to 9 px) and opacity (0.18 to 0.43) in <code>feltTex</code></td></tr>
+<tr><td>How flat the light is</td><td>The 4 values in <code>ramp</code>. Fewer steps = flatter. A higher first value = lighter shadows.</td></tr>
+<tr><td>The quilt</td><td>Square size <code>36.0</code>, the 7 colours in <code>quilt()</code>, stitch period <code>2.6</code></td></tr>
+<tr><td>Outline width</td><td><code>0.05 + _d * 0.0021</code> in <code>makeOutline</code></td></tr>
+<tr><td>Outline dashes</td><td>The scale <code>1.1</code> and the cut <code>0.58</code> in <code>makeOutline</code></td></tr>
+<tr><td>Fuzz at edges</td><td><code>2.2</code> in the felt pass (fibre fuzz)</td></tr>
+<tr><td>Seam darkness</td><td><code>seam * 0.55</code> in the felt pass</td></tr>
+<tr><td>Screen border</td><td><code>bw = 14.0</code> and the stitch period <code>13.0</code> in the felt pass</td></tr>
+<tr><td>Colours</td><td>The <code>PAL</code> table</td></tr>
+</table></div>
+</main>
+</body>
+</html>

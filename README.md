@@ -18,6 +18,32 @@ The game needs an internet connection at start, because it loads three.js from t
 
 How the game is built and tested: **[Tech stack and physics tests](https://az9713.github.io/opus-5.5-open-world-game/tech-stack.html)** (source: [`tech-stack.html`](tech-stack.html)).
 
+## Screenshots
+
+The three worlds, on High quality, at 10:00 in the morning.
+
+**In the air** — the felt bird over meadows, a road with traffic, and a knit-row mountain:
+
+![The felt bird flies over meadows, a road with traffic and a mountain](screenshots/air.jpg)
+
+**Under water** — the submarine in the Deep Felt Sea with a ray, a crab, a fish school, kelp and light patterns on the sea floor:
+
+![The submarine under water with a ray, a crab, fish, kelp and light patterns on the sea floor](screenshots/underwater.jpg)
+
+**On land** — the car on a knitted town street in Buttonbury, with felt houses, trees and street lamps:
+
+![The car on a knitted pink street between felt houses and trees](screenshots/land.jpg)
+
+## How the felt look is made
+
+**[Open the live page: How the felt look is made](https://az9713.github.io/opus-5.5-open-world-game/felt-effects.html)** (source: [`felt-effects.html`](felt-effects.html))
+
+The felt look comes from seven small layers: a wool palette, a canvas-drawn fibre texture, a 4-step toon ramp, quilt and knit patterns in the shaders, knitted road textures, running-stitch outlines, and a post-process pass that frays edges into fibres. The page explains each layer with its numbers and links to the code lines.
+
+GitHub does not run a web page inside a README, so the picture below is a screenshot of the live page. Click it to open the page.
+
+[![The top of the page How the felt look is made](screenshots/felt-effects-page.jpg)](https://az9713.github.io/opus-5.5-open-world-game/felt-effects.html)
+
 ## Inspiration
 
 - The YouTube video [*OPUS 5.5 Built this OPEN WORLD GAME in one PROMPT!!*](https://www.youtube.com/watch?v=u0LRYgON3Ug) (channel: Code Bear) shows **Paper World**, an ink-and-paper open-world driving game made with Opus 5.5 in one HTML file.
@@ -104,9 +130,11 @@ What the test covers, the results, and what is **not** tested are in [`tech-stac
 
 | File | What it is |
 |---|---|
-| `feltworld/index.html` | The whole game: 3,110 lines, HTML + CSS + one JavaScript module |
+| `feltworld/index.html` | The whole game: 3,231 lines, HTML + CSS + one JavaScript module |
 | `feltworld/physics-check.js` | The in-browser physics test |
 | `tech-stack.html` | Tech stack, physics design, and the test report |
+| `felt-effects.html` | How the felt look is made in code |
+| `screenshots/` | The screenshots in this README |
 
 ## License
 

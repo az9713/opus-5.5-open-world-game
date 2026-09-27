@@ -34,12 +34,12 @@
 <body>
 <main>
 <h1>Felt World — tech stack and physics tests</h1>
-<p class="lead">How the game is built, how its physics was tested in each world, and what was not tested. <a href="feltworld/">Play the game</a> · <a href="https://github.com/az9713/opus-5.5-open-world-game">Source on GitHub</a></p>
+<p class="lead">How the game is built, how its physics was tested in each world, and what was not tested. <a href="feltworld/">Play the game</a> · <a href="felt-effects.html">How the felt look is made</a> · <a href="https://github.com/az9713/opus-5.5-open-world-game">Source on GitHub</a></p>
 
 <h2>1. Is a game engine used?</h2>
 <div class="card no">
 <p><strong>No.</strong> There is no game engine (no Unity, Unreal, Godot, Babylon.js or PlayCanvas) and no physics engine (no Rapier, cannon.js or Ammo.js).</p>
-<p>The game uses <strong>three.js 0.170.0</strong>. three.js is a rendering library: it gives a scene graph, cameras, materials, and WebGL drawing. It does not give a game loop, collision, physics, audio, input, or world streaming. The game code writes all of those itself, in one JavaScript module inside <code>feltworld/index.html</code> (3,110 lines, 172,170 bytes).</p>
+<p>The game uses <strong>three.js 0.170.0</strong>. three.js is a rendering library: it gives a scene graph, cameras, materials, and WebGL drawing. It does not give a game loop, collision, physics, audio, input, or world streaming. The game code writes all of those itself, in one JavaScript module inside <code>feltworld/index.html</code> (3,231 lines, 178,562 bytes).</p>
 </div>
 
 <h2>2. Tech stack</h2>
@@ -47,7 +47,7 @@
 <tr><th>Part</th><th>What is used</th></tr>
 <tr><td>Delivery</td><td>One HTML file. No build step, no bundler, no package manager. Any static web server serves it. GitHub Pages hosts the play link.</td></tr>
 <tr><td>Rendering</td><td>three.js 0.170.0 from the jsDelivr CDN through an import map (<code>three</code> and <code>three/addons/</code>). WebGL.</td></tr>
-<tr><td>Look</td><td>Toon materials with a soft gradient ramp. Running-stitch outlines (inverted hull, fragments discarded in a dash pattern). A post-process <code>ShaderMaterial</code>: wool-fibre fuzz, felt grain, soft seams at depth edges, a stitched fabric border. A sky <code>ShaderMaterial</code>.</td></tr>
+<tr><td>Look</td><td>Toon materials with a soft gradient ramp. Running-stitch outlines (inverted hull, fragments discarded in a dash pattern). A post-process <code>ShaderMaterial</code>: wool-fibre fuzz, felt grain, soft seams at depth edges, a stitched fabric border. A sky <code>ShaderMaterial</code>. Details: <a href="felt-effects.html">How the felt look is made</a>.</td></tr>
 <tr><td>Textures</td><td>Drawn at start on 2D <code>&lt;canvas&gt;</code> elements: felt noise, knitted roads with a stitched centre line, quilted fields. No image files.</td></tr>
 <tr><td>World</td><td>Pure functions of (x, z): height, biome masks (town, fields, meadow, forest, mountain, ocean), and a warped road grid. Chunks are built one per frame, nearest first, from a seeded random generator per chunk, and are removed past a radius.</td></tr>
 <tr><td>Props and crowds</td><td><code>InstancedMesh</code> batches of scaled primitives with a colour per instance. Traffic, pedestrians, sheep, rabbits, fish, jellyfish, rays, sea turtles, crabs and whales are crowds on instanced meshes that respawn round the player.</td></tr>
