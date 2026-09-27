@@ -27,6 +27,9 @@
   .num { font-variant-numeric: tabular-nums; }
   .src { color: var(--muted); font-size: .9rem; }
   ol.pipe li { margin: 4px 0; }
+  figure.cat { margin: 20px 0; max-width: 100%; }
+  figure.cat canvas { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
+  figure.cat figcaption { color: var(--muted); font-size: .9rem; margin-top: 8px; max-width: 72ch; }
 </style>
 </head>
 <body>
@@ -37,6 +40,7 @@
 <div class="card">
 <p><strong>In short:</strong> the felt look comes from seven small layers. Each layer copies one thing you see on a real felt model: soft colour, fibres, flat light bands, quilt seams, knitted stitches, thread outlines, and a fuzzy edge.</p>
 <p class="src">All code is in <code>feltworld/index.html</code>. Line links go to commit <code>92ab92f</code>. The library is three.js 0.170.0.</p>
+<p class="src" id="catnote">The cat pictures on this page are rendered live in your browser by code copied from <code>feltworld/index.html</code>. Each picture adds one layer to the picture before it. Changes for this small scene: the quilt squares are 3 m (36 m in the game); the camera field of view is 40° (62° in the game); there is no shadow map, as on Low quality. The game has no cat. The cat uses the same simple shapes as the game's sheep.</p>
 </div>
 
 <h2>1. The seven layers, in the order of one frame</h2>
@@ -50,6 +54,7 @@
 <li><strong>The felt pass (post-process).</strong> After the 3D scene is drawn, one more shader blurs the edges into fibres, adds felt grain and seams, and sews a fabric border round the screen.</li>
 </ol>
 <p>A <em>shader</em> is a small program that runs on the graphics card. It computes the colour of each pixel. The layers 3, 4, 6 and 7 are shader code. The layers 2 and 5 are canvas drawings. Layer 1 is settings.</p>
+<figure class="cat" data-step="0"><figcaption><strong>Step 0: the starting point.</strong> This is a plain three.js set-up: <code>MeshStandardMaterial</code> in bright pure colours, a white ambient light (0.5) and a white directional light (3.0). Tone mapping is ACES Filmic. The background is black. The cat has 21 parts, made from 5 simple shapes: sphere, cone, cylinder, torus and box.</figcaption></figure>
 
 <h2>2. Wool palette and soft light</h2>
 <p>All colours come from one table, <code>PAL</code> (<a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L353">line 353</a>). The table has 21 colours with low saturation, for example oat <code>#d9c9a8</code>, mustard <code>#d4a636</code>, sage <code>#9caf88</code>, terra <code>#c46a4a</code>. The outline colour is <code>thread</code>, <code>#5a3e36</code>, a dark brown. Houses, trees and coral pick from short lists of these colours.</p>
@@ -60,6 +65,7 @@
 <li><strong>Antialiasing off.</strong> The renderer has <code>antialias: false</code>. The felt pass in layer 7 breaks every edge into fibres, so sharp edges do not show.</li>
 </ul>
 
+<figure class="cat" data-step="1"><figcaption><strong>Step 1: + wool palette and soft light.</strong> The cat colours now come from <code>PAL</code>: terra body, cream muzzle and paws. The scarf is the grey-blue road base colour (<code>#7a7f8e</code>). The ground is the terrain field colour (<code>#b0b47c</code>). The hemisphere light (1.4) and the warm sun (2.2) replace the two white lights. Tone mapping is off. The background is <code>#cfe0dc</code>. The fog starts at 200 m, so it has no effect in this 9 m scene.</figcaption></figure>
 <h2>3. The felt texture (drawn on a canvas)</h2>
 <p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L406">Line 406</a></p>
 <p>At start, the code draws a 256 × 256 pixel picture on a hidden 2D canvas. It fills the picture with a pale grey <code>#e9e4dc</code>. Then it draws 5,200 short, curved strokes in random places and directions:</p>
@@ -81,6 +87,7 @@
 <p>The texture is grey. Each object multiplies it by its own colour. So one texture gives felt in all 21 palette colours. The texture repeats, and it has 4× anisotropic filtering, so fibres stay sharp on surfaces seen at a low angle.</p>
 <p>Two more canvas textures use the same method: the knitted roads (section 6) and the sewing-button face (a rim, four holes and a thread cross, <a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L438">line 438</a>).</p>
 
+<figure class="cat" data-step="2"><figcaption><strong>Step 2: + felt texture.</strong> Each surface multiplies its colour by the 256 × 256 fibre texture. Short light and dark strokes now show on the cat and on the ground. The ground has one texture tile for each 9 m, as the game terrain has.</figcaption></figure>
 <h2>4. The toon ramp: light in flat bands</h2>
 <p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L448">Line 448</a></p>
 <pre><code>const ramp = new THREE.DataTexture(new Uint8Array([110, 165, 215, 255]), 4, 1, THREE.RedFormat);
@@ -89,6 +96,7 @@ ramp.minFilter = ramp.magFilter = THREE.NearestFilter;</code></pre>
 <p>The darkest band is 43 %, not black. This keeps shadowed sides soft, like light that goes through wool.</p>
 <p>Almost every material in the game is a <code>MeshToonMaterial</code> with <code>map: feltTex, gradientMap: ramp</code>: props, terrain, water, animals, cars, the player models.</p>
 
+<figure class="cat" data-step="3"><figcaption><strong>Step 3: + toon ramp.</strong> <code>MeshToonMaterial</code> with the 4-step ramp replaces <code>MeshStandardMaterial</code>. The light on the body and the head now falls in flat bands, with hard steps between them.</figcaption></figure>
 <h2>5. Patterns in the shaders</h2>
 <p>three.js gives each material a built-in shader. The game changes that shader with <code>onBeforeCompile</code>. This hook gets the shader text before it is compiled. The game inserts its own lines at named places, for example after <code>#include &lt;color_fragment&gt;</code>. So the patterns keep all normal three.js features: lights, shadows, fog, the toon ramp.</p>
 <p>A helper, <code>addWorldPos</code> (<a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L452">line 452</a>), sends the world position of each pixel to the fragment shader. The patterns use world position, not texture coordinates. So a pattern does not stretch on a slope, and it lines up across the borders of terrain chunks.</p>
@@ -107,6 +115,7 @@ q = mix(q, q * 0.72, step(e, 0.5));                              // darker seam
 q = mix(q, pow(vec3(0.95,0.9,0.8), vec3(2.2)), stitch);         // cream thread</code></pre>
 <p>Where the quilt shows is set per terrain vertex, in an extra attribute <code>aMat</code> (<a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L805">line 805</a>). The quilt fades in with the field mask. It is off below 3 m height and on roads. The same attribute holds a second weight for mountains.</p>
 
+<figure class="cat" data-step="4"><figcaption><strong>Step 4: + quilt pattern in the shader.</strong> The ground shader now draws quilt squares with furrow rows, darker seams and a cream running stitch. Scale change: the squares are 3 m here and 36 m in the game. All quilt lengths use the same factor, 1/12.</figcaption></figure>
 <h3>5.2 Knit rows on mountains</h3>
 <p>On mountain slopes, a zig-zag pattern on height makes rows that look like knitting. The rows repeat about every 1.8 m of height (<code>vWP.y * 0.55</code>). The pattern changes brightness between 86 % and 104 %.</p>
 
@@ -130,6 +139,7 @@ q = mix(q, pow(vec3(0.95,0.9,0.8), vec3(2.2)), stitch);         // cream thread<
 </ul>
 <p>There are two versions: grey-blue roads with a mustard centre line, and pink town streets with a cream centre line.</p>
 
+<figure class="cat" data-step="5"><figcaption><strong>Step 5: + knitted texture.</strong> The scarf now uses the <code>knitRoadTex</code> canvas: rows of V stitches, dark edge bands and a mustard centre line in dashes. The game puts this texture on its roads. The scarf is only on this page.</figcaption></figure>
 <h2>7. Running-stitch outlines</h2>
 <p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L550">Line 550</a></p>
 <p>Felt toys often have a visible thread round their edges. The game makes this with an <strong>inverted hull</strong>: it draws each object a second time, a little larger, in the thread colour, and shows only the back faces. The front of the real object covers the middle of the copy. So only a thin rim of the copy shows round the edge, as an outline.</p>
@@ -142,6 +152,7 @@ _w.xyz += _wn * (0.05 + _d * 0.0021);      // push each vertex out along its nor
 <li><strong>Cost control.</strong> The outline copy shares the object's instance matrices, so it costs no extra memory for positions. Outlines turn off past 560 m. Small props and their outlines turn off past 380 m (<a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L1297">line 1297</a>).</li>
 </ul>
 
+<figure class="cat" data-step="6"><figcaption><strong>Step 6: + running-stitch outlines.</strong> The cat and the scarf now have a dark thread outline (<code>#5a3e36</code>), cut into dashes. The nose, the eyes and the inner ears have no outline. The game gives moving animals a solid outline. This cat stays still, so it gets the dashed outline of a static prop.</figcaption></figure>
 <h3>Why simple shapes are enough</h3>
 <p>Every prop is built from 10 simple shapes: box, icosahedron, cone, cylinder, sphere, a 4-sided roof, a rock (dodecahedron), kelp, torus and disc (<a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L578">line 578</a>). A tree is a cylinder and some icosahedrons. A house is a box and a roof. The shapes have few faces (a sphere has 14 × 10 segments, a cone 9 sides). With the felt texture, the ramp and the outline, low-detail shapes read as hand-cut felt pieces. All props in a chunk with the same shape go into one <code>InstancedMesh</code>, with one colour per instance (<code>Batch</code>, <a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L594">line 594</a>). Animals and cars use the same method (<code>Crowd</code>, <a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L1872">line 1872</a>).</p>
 
@@ -149,7 +160,7 @@ _w.xyz += _wn * (0.05 + _d * 0.0021);      // push each vertex out along its nor
 <p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L631">Line 631</a></p>
 <p>The sky is a sphere of radius 3,000 m with its own shader. The colour goes from a pale horizon (<code>#f0e2c8</code>) to a soft blue top (<code>#8cb8c8</code>). The sun is a disc with a soft glow. Two crossed sine waves change the brightness by ±3 %, which gives faint fibre streaks, as if the sky were a stretched cloth. At night, a hash on a grid of directions places stars, and each star twinkles on its own phase.</p>
 
-<h2>9. The felt pass (post-process)</h2>
+<h2 id="felt-pass">9. The felt pass (post-process)</h2>
 <p class="src"><a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L670">Line 670</a> · render order at <a href="https://github.com/az9713/opus-5.5-open-world-game/blob/92ab92f/feltworld/index.html#L1600">line 1600</a></p>
 <p>The game does not draw the 3D scene to the screen directly. It draws the scene into an off-screen picture (a render target with a depth texture, in half-float colour). Then it draws one rectangle over the whole screen with the felt-pass shader. That shader reads the off-screen picture and its depth, and makes the final pixels:</p>
 <pre><code>function render() {
@@ -170,6 +181,7 @@ _w.xyz += _wn * (0.05 + _d * 0.0021);      // push each vertex out along its nor
 </table></div>
 <p>All pixel sizes are divided by the device pixel ratio (<code>dpr</code>). So the fibres, the grain and the border are the same size on a normal screen and on a high-density screen.</p>
 
+<figure class="cat" data-step="7"><figcaption><strong>Step 7: + felt pass.</strong> The scene now goes to a render target first. Then the full-screen shader breaks the edges into fibres, mixes in the colour of the neighbours and darkens depth seams to brown. It also adds grain, darker corners, and a teal border with a cream stitch. This is the fully felted cat.</figcaption></figure>
 <h2>10. What the layers cost</h2>
 <ul>
 <li>The canvas textures are drawn once, at start. The felt texture has 5,200 strokes on 256 × 256 pixels.</li>
@@ -193,5 +205,336 @@ _w.xyz += _wn * (0.05 + _d * 0.0021);      // push each vertex out along its nor
 <tr><td>Colours</td><td>The <code>PAL</code> table</td></tr>
 </table></div>
 </main>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+// Felt cat, one layer at a time. Every felt layer below is copied from feltworld/index.html (commit 92ab92f).
+// Changes for this small scene: quilt scale 1/12, camera fov 40 (game 62), no shadow map.
+const figs = [...document.querySelectorAll('figure.cat')];
+const note = document.getElementById('catnote');
+try {
+  const THREE = await import('three');
+  const W = 840, H = 560;
+
+  // ---- copied: mulberry32 (game line 192)
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  // ---- copied: palette (game line 353), the colours this cat uses
+  const PAL = { terra: 0xc46a4a, cream: 0xf1e6cf, pink: 0xe8a0b0, charcoal: 0x4a4040, thread: 0x5a3e36 };
+
+  const renderer = new THREE.WebGLRenderer({ canvas: document.createElement('canvas'), antialias: false, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(W, H, false);
+
+  // ---- copied: canvas textures (game lines 395-431)
+  function canvasTex(w, h, draw, repeat = true) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d'); draw(g, w, h);
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    return t;
+  }
+  const texRand = mulberry32(777);
+  const feltTex = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#e9e4dc'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 5200; i++) {
+      const x = texRand() * w, y = texRand() * h, a = texRand() * Math.PI * 2, l = 2 + texRand() * 7;
+      const v = texRand() < 0.5 ? 255 : 170 + texRand() * 40;
+      g.strokeStyle = `rgba(${v},${v - 4},${v - 10},${0.18 + texRand() * 0.25})`;
+      g.lineWidth = 0.6 + texRand() * 0.8;
+      g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a + 1) * l * 0.5, y + Math.sin(a + 1) * l * 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+    }
+  });
+  function knitRoadTex(base, stitch, edge, dash) {
+    return canvasTex(128, 256, (g, w, h) => {
+      g.fillStyle = base; g.fillRect(0, 0, w, h);
+      const cols = 8, rows = 16, cw = w / cols, rh = h / rows;
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const x = c * cw, y = r * rh;
+        g.strokeStyle = stitch; g.lineWidth = 3.2; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(x + 2, y + 2); g.lineTo(x + cw / 2, y + rh - 2); g.lineTo(x + cw - 2, y + 2); g.stroke();
+        g.strokeStyle = 'rgba(0,0,0,.12)'; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(x + cw / 2, y + rh - 1); g.lineTo(x + cw / 2, y + rh + 1); g.stroke();
+      }
+      g.fillStyle = edge; g.fillRect(0, 0, 10, h); g.fillRect(w - 10, 0, 10, h);
+      g.strokeStyle = dash; g.lineWidth = 5; g.setLineDash([22, 14]); g.lineCap = 'round';
+      g.beginPath(); g.moveTo(w / 2, 0); g.lineTo(w / 2, h); g.stroke();
+      g.setLineDash([8, 7]); g.lineWidth = 2; g.strokeStyle = '#efe3c8';
+      g.beginPath(); g.moveTo(14, 0); g.lineTo(14, h); g.moveTo(w - 14, 0); g.lineTo(w - 14, h); g.stroke();
+    });
+  }
+  const roadTex = knitRoadTex('#7a7f8e', '#8f94a3', '#5e5a66', '#e2b84a');
+
+  // ---- copied: toon ramp (game line 448)
+  const ramp = new THREE.DataTexture(new Uint8Array([110, 165, 215, 255]), 4, 1, THREE.RedFormat);
+  ramp.minFilter = ramp.magFilter = THREE.NearestFilter; ramp.needsUpdate = true;
+
+  // ---- copied: addWorldPos (game line 452)
+  function addWorldPos(sh, instanced) {
+    sh.vertexShader = 'varying vec3 vWP;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vec4 _wp = vec4(transformed, 1.0);
+      ${instanced ? '#ifdef USE_INSTANCING\n _wp = instanceMatrix * _wp;\n#endif' : ''}
+      vWP = (modelMatrix * _wp).xyz;`);
+    sh.fragmentShader = 'varying vec3 vWP;\n' + sh.fragmentShader;
+  }
+  // ---- copied: quilt part of the terrain shader (game lines 484-521).
+  // Scale change: qW = vWP * 12.0, so the 36 m squares are 3 m here. Every number inside is unchanged.
+  function quiltOnBeforeCompile(sh) {
+    addWorldPos(sh, false);
+    sh.vertexShader = 'attribute vec2 aMat;\nvarying vec2 vMat;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vMat = aMat;');
+    sh.fragmentShader = `varying vec2 vMat;
+      float th(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      vec3 quilt(float i){
+        i = floor(i * 7.0);
+        if (i < 1.0) return vec3(0.83,0.64,0.21);
+        if (i < 2.0) return vec3(0.61,0.69,0.53);
+        if (i < 3.0) return vec3(0.77,0.42,0.29);
+        if (i < 4.0) return vec3(0.85,0.79,0.66);
+        if (i < 5.0) return vec3(0.44,0.54,0.33);
+        if (i < 6.0) return vec3(0.83,0.60,0.60);
+        return vec3(0.71,0.66,0.44);
+      }
+      ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+        vec3 qW = vWP * 12.0;
+        if (vMat.x > 0.01) {
+          vec2 cell = floor(qW.xz / 36.0);
+          vec2 f = fract(qW.xz / 36.0) * 36.0;
+          vec3 q = pow(quilt(th(cell)), vec3(2.2));
+          float rows = 0.93 + 0.07 * step(0.5, fract((th(cell + 3.0) > 0.5 ? f.x : f.y) / 3.0));
+          q *= rows;
+          float e = min(min(f.x, f.y), min(36.0 - f.x, 36.0 - f.y));
+          float along = (min(f.x, 36.0 - f.x) < min(f.y, 36.0 - f.y)) ? qW.z : qW.x;
+          float stitch = step(e, 1.35) * step(0.45, fract(along / 2.6)) * step(0.55, e);
+          q = mix(q, q * 0.72, step(e, 0.5));
+          q = mix(q, pow(vec3(0.95,0.9,0.8), vec3(2.2)), stitch);
+          diffuseColor.rgb = mix(diffuseColor.rgb, q, vMat.x);
+        }`);
+  }
+
+  // ---- copied: running-stitch outline (game line 550)
+  function makeOutline(dash, color = PAL.thread) {
+    const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+    m.onBeforeCompile = (sh) => {
+      sh.vertexShader = 'varying vec3 vOW;\n' + sh.vertexShader.replace('#include <project_vertex>', `
+        vec4 _lp = vec4(transformed, 1.0);
+        vec3 _ln = normal;
+        #ifdef USE_INSTANCING
+          _lp = instanceMatrix * _lp;
+          _ln = mat3(instanceMatrix) * _ln;
+        #endif
+        vec4 _w = modelMatrix * _lp;
+        vec3 _wn = normalize(mat3(modelMatrix) * _ln);
+        float _d = length(cameraPosition - _w.xyz);
+        _w.xyz += _wn * (0.05 + _d * 0.0021);
+        vOW = _w.xyz;
+        vec4 mvPosition = viewMatrix * _w;
+        gl_Position = projectionMatrix * mvPosition;`);
+      sh.fragmentShader = 'varying vec3 vOW;\n' + sh.fragmentShader.replace('void main() {', dash ?
+        'void main() {\n float _s = dot(vOW, vec3(0.83, 0.61, 0.71)) * 1.1; if (fract(_s) > 0.58) discard;' : 'void main() {');
+    };
+    m.customProgramCacheKey = () => 'outline' + (dash ? 'D' : 'S');
+    return m;
+  }
+  const OL_DASH = makeOutline(true);
+
+  // ---- copied: shared unit geometries (game line 578), the 5 this cat uses
+  const GEO = {
+    box: new THREE.BoxGeometry(1, 1, 1),
+    cone: new THREE.ConeGeometry(1, 1, 9),
+    cyl: new THREE.CylinderGeometry(1, 1, 1, 12),
+    sph: new THREE.SphereGeometry(1, 14, 10),
+    torus: new THREE.TorusGeometry(1, 0.3, 8, 18),
+  };
+  // scarf ring: swap the torus UVs so the knit runs like a road (u across the band, v along it).
+  // +0.5 puts the centre line on the outer face; 1.4 keeps the 1:2 texture aspect of the road.
+  GEO.scarf = GEO.torus.clone();
+  { const uv = GEO.scarf.attributes.uv; for (let i = 0; i < uv.count; i++) { const a = uv.getX(i), b = uv.getY(i); uv.setXY(i, b + 0.5, a * 1.4); } }
+
+  // ---- the cat: parts in the style of the game's P_() / SHEEP_PARTS (geo, colour key, scale, position, rotation)
+  const C = {
+    body:  { plain: 0xff6600, felt: PAL.terra },
+    light: { plain: 0xffffff, felt: PAL.cream },
+    pink:  { plain: 0xff4d94, felt: PAL.pink },
+    dark:  { plain: 0x000000, felt: PAL.charcoal },
+    scarf: { plain: 0x2255ff, felt: 0x7a7f8e },
+    ground:{ plain: 0x22aa22, felt: 0xb0b47c },
+  };
+  const P_ = (geo, col, sx, sy, sz, x, y, z, rx = 0, ry = 0, rz = 0, extra = {}) => ({ geo, col, s: [sx, sy, sz], p: [x, y, z], r: [rx, ry, rz], ol: true, ...extra });
+  const CAT_PARTS = [
+    P_('sph', 'body', 0.7, 0.65, 1.15, 0, 1.3, 0),                                    // body
+    P_('sph', 'body', 0.6, 0.55, 0.55, 0, 2.15, 1.25),                                // head
+    P_('sph', 'light', 0.3, 0.22, 0.2, 0, 1.98, 1.72),                                // muzzle
+    P_('sph', 'pink', 0.09, 0.07, 0.07, 0, 2.08, 1.9, 0, 0, 0, { ol: false }),        // nose
+    P_('sph', 'dark', 0.09, 0.11, 0.07, -0.24, 2.3, 1.7, 0, 0, 0, { ol: false }),     // eyes
+    P_('sph', 'dark', 0.09, 0.11, 0.07, 0.24, 2.3, 1.7, 0, 0, 0, { ol: false }),
+    P_('cone', 'body', 0.2, 0.42, 0.14, -0.33, 2.72, 1.15, 0, 0, 0.3),                // ears
+    P_('cone', 'body', 0.2, 0.42, 0.14, 0.33, 2.72, 1.15, 0, 0, -0.3),
+    P_('cone', 'pink', 0.11, 0.26, 0.05, -0.32, 2.68, 1.27, 0, 0, 0.3, { ol: false }),
+    P_('cone', 'pink', 0.11, 0.26, 0.05, 0.32, 2.68, 1.27, 0, 0, -0.3, { ol: false }),
+    P_('cyl', 'body', 0.16, 1.0, 0.16, -0.38, 0.5, 0.7),                              // legs
+    P_('cyl', 'body', 0.16, 1.0, 0.16, 0.38, 0.5, 0.7),
+    P_('cyl', 'body', 0.16, 1.0, 0.16, -0.38, 0.5, -0.7),
+    P_('cyl', 'body', 0.16, 1.0, 0.16, 0.38, 0.5, -0.7),
+    P_('sph', 'light', 0.2, 0.12, 0.26, -0.38, 0.08, 0.76),                           // paws
+    P_('sph', 'light', 0.2, 0.12, 0.26, 0.38, 0.08, 0.76),
+    P_('sph', 'light', 0.2, 0.12, 0.26, -0.38, 0.08, -0.64),
+    P_('sph', 'light', 0.2, 0.12, 0.26, 0.38, 0.08, -0.64),
+    P_('cyl', 'body', 0.11, 1.6, 0.11, 0, 2.16, -1.5, -0.6),                          // tail
+    P_('scarf', 'scarf', 0.55, 0.55, 0.9, 0, 1.8, 0.95, -0.6, 0, 0, { knit: true }),  // scarf ring
+    P_('box', 'scarf', 0.28, 0.75, 0.07, 0.3, 1.4, 1.36, -0.15, 0, 0, { knit: true }), // scarf end
+  ];
+
+  const camera = new THREE.PerspectiveCamera(40, W / H, 0.5, 5000);
+  const target = new THREE.Vector3(1.5, 1.35, 1.6);
+  camera.position.set(1.5 + 4.9, 4.1, 1.6 + 5.3);
+  camera.lookAt(target);
+  const sunDir = new THREE.Vector3(-0.5, 0.65, 0.57).normalize();
+
+  // ---- copied: felt pass (game lines 670-732), sized for one 840 x 560 picture at dpr 1
+  const rtOpts = { type: THREE.HalfFloatType, samples: 0 };
+  const rt = new THREE.WebGLRenderTarget(W, H, rtOpts);
+  rt.depthTexture = new THREE.DepthTexture(W, H);
+  const U = { uTime: { value: 0 }, uUnder: { value: 0 } };
+  const postMat = new THREE.ShaderMaterial({
+    uniforms: {
+      tColor: { value: rt.texture }, tDepth: { value: rt.depthTexture }, res: { value: new THREE.Vector2(W, H) },
+      uTime: U.uTime, uUnder: U.uUnder, uFade: { value: 1 }, near: { value: camera.near }, far: { value: camera.far },
+      dpr: { value: 1 }, uSpeed: { value: 0 },
+    },
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+    fragmentShader: `uniform sampler2D tColor, tDepth; uniform vec2 res; uniform float uTime, uUnder, uFade, near, far, dpr, uSpeed;
+      varying vec2 vUv;
+      float hh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hh(i), hh(i + vec2(1, 0)), f.x), mix(hh(i + vec2(0, 1)), hh(i + vec2(1, 1)), f.x), f.y); }
+      float lin(float d){ float z = d * 2.0 - 1.0; return 2.0 * near * far / (far + near - z * (far - near)); }
+      vec3 tex(vec2 u){ return texture2D(tColor, u).rgb; }
+      void main(){
+        vec2 px = 1.0 / res;
+        vec2 uv = vUv;
+        uv += uUnder * vec2(sin(uv.y * 28.0 + uTime * 1.4), cos(uv.x * 22.0 + uTime * 1.1)) * 0.0016;
+        vec2 q = uv * res / dpr;
+        vec2 j = vec2(vn(q * 0.9), vn(q * 0.9 + 31.7)) - 0.5;
+        j += (vec2(hh(floor(q * 0.5)), hh(floor(q * 0.5) + 7.3)) - 0.5) * 0.6;
+        vec2 uvj = uv + j * px * 2.2 * dpr;
+        vec3 c = tex(uvj);
+        vec2 o = px * 2.0 * dpr;
+        vec3 b = (tex(uvj + vec2(o.x, 0.0)) + tex(uvj - vec2(o.x, 0.0)) + tex(uvj + vec2(0.0, o.y)) + tex(uvj - vec2(0.0, o.y))) * 0.25;
+        c = mix(c, b, 0.3);
+        float d0 = lin(texture2D(tDepth, vUv).r);
+        vec2 e1 = px * 1.5 * dpr;
+        float d1 = lin(texture2D(tDepth, vUv + vec2(e1.x, 0.0)).r), d2 = lin(texture2D(tDepth, vUv - vec2(e1.x, 0.0)).r);
+        float d3 = lin(texture2D(tDepth, vUv + vec2(0.0, e1.y)).r), d4 = lin(texture2D(tDepth, vUv - vec2(0.0, e1.y)).r);
+        float lap = abs(d1 + d2 + d3 + d4 - 4.0 * d0) / max(d0, 1.0);
+        float seam = smoothstep(0.04, 0.2, lap) * (1.0 - smoothstep(300.0, 900.0, d0));
+        c = mix(c, c * vec3(0.62, 0.52, 0.48), seam * 0.55);
+        vec2 gq = vUv * res / dpr;
+        float g = vn(gq * 0.45) * 0.5 + vn(gq * 1.3 + 5.0) * 0.3 + vn(gq * 0.11 + 9.0) * 0.2;
+        c *= 0.94 + g * 0.11;
+        c = mix(c, c * vec3(0.72, 0.95, 0.98) + vec3(0.0, 0.015, 0.03), uUnder * 0.6);
+        vec2 vc = vUv - 0.5;
+        c *= 1.0 - dot(vc, vc) * 0.55;
+        vec2 sp = vUv * res / dpr;
+        vec2 sr = res / dpr;
+        float m = min(min(sp.x, sp.y), min(sr.x - sp.x, sr.y - sp.y));
+        float bw = 14.0;
+        vec3 fab = vec3(0.16, 0.30, 0.29) * (0.9 + 0.1 * sin(sp.x * 1.6) * sin(sp.y * 1.6)) * (0.92 + g * 0.12);
+        c = mix(c, c * 0.8, smoothstep(bw + 10.0, bw, m) * 0.5);
+        float along = (min(sp.x, sr.x - sp.x) < min(sp.y, sr.y - sp.y)) ? sp.y : sp.x;
+        float st = step(abs(m - (bw - 5.0)), 1.2) * step(0.45, fract(along / 13.0));
+        c = mix(c, fab, step(m, bw));
+        c = mix(c, vec3(0.93, 0.86, 0.72), st);
+        c = mix(vec3(0.16, 0.30, 0.29), c, uFade);
+        gl_FragColor = vec4(c, 1.0);
+        #include <colorspace_fragment>
+      }`,
+    depthTest: false, depthWrite: false,
+  });
+  const postScene = new THREE.Scene();
+  const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat);
+  postQuad.frustumCulled = false;
+  postScene.add(postQuad);
+
+  // ---- one scene per step. Step N = step N-1 + one layer.
+  function surface(key, step) {
+    const p = { color: step >= 1 ? C[key].felt : C[key].plain };
+    if (step >= 2) p.map = feltTex;
+    if (step >= 3) { p.gradientMap = ramp; return new THREE.MeshToonMaterial(p); }
+    return new THREE.MeshStandardMaterial(p);
+  }
+  function buildScene(step) {
+    const scene = new THREE.Scene();
+    if (step === 0) {
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const dl = new THREE.DirectionalLight(0xffffff, 3.0); dl.position.copy(sunDir).multiplyScalar(20).add(target); dl.target.position.copy(target);
+      scene.add(dl, dl.target);
+    } else {
+      // layer 1, copied from game lines 368-381: tone mapping off, fog, background, warm hemisphere light and sun
+      renderer.toneMapping = THREE.NoToneMapping;
+      scene.fog = new THREE.Fog(0xcfe0dc, 200, 1150);
+      scene.background = new THREE.Color(0xcfe0dc);
+      scene.add(new THREE.HemisphereLight(0xfff2dc, 0x8a6e58, 1.4));
+      const sun = new THREE.DirectionalLight(0xfff0d8, 2.2); sun.position.copy(sunDir).multiplyScalar(20).add(target); sun.target.position.copy(target);
+      scene.add(sun, sun.target);
+    }
+    // ground patch: 9 x 9 m, UV 0..1, so one felt tile per 9 m (game terrain: uv = x / 9)
+    const gg = new THREE.PlaneGeometry(9, 9).rotateX(-Math.PI / 2);
+    gg.setAttribute('aMat', new THREE.Float32BufferAttribute(new Array(gg.attributes.position.count).fill([1, 0]).flat(), 2));
+    const gm = surface('ground', step);
+    if (step >= 4) gm.onBeforeCompile = quiltOnBeforeCompile;          // layer 4
+    const ground = new THREE.Mesh(gg, gm); ground.position.set(1.5, 0, 1.5);
+    scene.add(ground);
+    const cat = new THREE.Group(); cat.position.set(1.5, 0, 1.5);
+    const knitMat = step >= 5 ? new THREE.MeshToonMaterial({ map: roadTex, gradientMap: ramp }) : null;   // layer 5 = game roadMat
+    for (const pt of CAT_PARTS) {
+      const mat = pt.knit && knitMat ? knitMat : surface(pt.col, step);
+      const mesh = new THREE.Mesh(GEO[pt.geo], mat);
+      mesh.position.set(...pt.p); mesh.rotation.set(...pt.r); mesh.scale.set(...pt.s);
+      cat.add(mesh);
+      if (step >= 6 && pt.ol) {                                           // layer 6
+        const ol = new THREE.Mesh(GEO[pt.geo], OL_DASH);
+        ol.position.copy(mesh.position); ol.rotation.copy(mesh.rotation); ol.scale.copy(mesh.scale);
+        cat.add(ol);
+      }
+    }
+    scene.add(cat);
+    return scene;
+  }
+  function render(scene) {                                                // copied render(), game line 1600
+    renderer.setRenderTarget(rt);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    renderer.render(postScene, postCam);
+  }
+  for (const f of figs) {
+    const step = +f.dataset.step;
+    const scene = buildScene(step);
+    if (step >= 7) render(scene);                                          // layer 7
+    else { renderer.setRenderTarget(null); renderer.render(scene, camera); }
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    cv.getContext('2d').drawImage(renderer.domElement, 0, 0);
+    cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', 'Felt cat, step ' + step);
+    f.prepend(cv);
+  }
+} catch (e) {
+  for (const f of figs) f.hidden = true;
+  note.textContent = 'The cat pictures could not render in this browser (' + (e && e.message || e) + ').';
+  console.error(e);
+}
+</script>
 </body>
 </html>

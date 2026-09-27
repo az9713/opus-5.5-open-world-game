@@ -38,11 +38,17 @@ The three worlds, on High quality, at 10:00 in the morning.
 
 **[Open the live page: How the felt look is made](https://az9713.github.io/opus-5.5-open-world-game/felt-effects.html)** (source: [`felt-effects.html`](felt-effects.html))
 
-The felt look comes from seven small layers: a wool palette, a canvas-drawn fibre texture, a 4-step toon ramp, quilt and knit patterns in the shaders, knitted road textures, running-stitch outlines, and a post-process pass that frays edges into fibres. The page explains each layer with its numbers and links to the code lines.
+The felt look comes from seven small layers: a wool palette, a canvas-drawn fibre texture, a 4-step toon ramp, quilt and knit patterns in the shaders, knitted road textures, running-stitch outlines, and a post-process pass that frays edges into fibres. The page explains each layer with its numbers and links to the code lines. It also shows a felt cat that gets one layer more in each section, from a plain three.js cat (step 0) to the fully felted cat (step 7).
 
-GitHub does not run a web page inside a README, so the picture below is a screenshot of the live page. Click it to open the page.
+GitHub does not run a web page inside a README, so the two pictures below are screenshots of the documentation page. They are not screenshots of the game. Click a picture to open the live page.
 
-[![The top of the page How the felt look is made](screenshots/felt-effects-page.jpg)](https://az9713.github.io/opus-5.5-open-world-game/felt-effects.html)
+The top of the documentation page:
+
+[![Screenshot of the documentation page How the felt look is made: the title, the summary and the note on the cat pictures](screenshots/felt-effects-page.jpg)](https://az9713.github.io/opus-5.5-open-world-game/felt-effects.html)
+
+Step 7 of the felt-cat demonstration on that page. The cat is a demonstration scene for the page, drawn in your browser with the game's felt code. **The game has no cat.** The teal stitched frame is the same border that the game's felt pass draws round the screen:
+
+[![Screenshot of step 7 on the documentation page: the fully felted demonstration cat on a quilt, with its caption](screenshots/felt-effects-cat-step7.jpg)](https://az9713.github.io/opus-5.5-open-world-game/felt-effects.html#felt-pass)
 
 ## Inspiration
 
@@ -134,7 +140,7 @@ What the test covers, the results, and what is **not** tested are in [`tech-stac
 | `feltworld/physics-check.js` | The in-browser physics test |
 | `tech-stack.html` | Tech stack, physics design, and the test report |
 | `felt-effects.html` | How the felt look is made in code |
-| `screenshots/` | The screenshots in this README |
+| `screenshots/` | The screenshots in this README: three of the game (`air`, `underwater`, `land`) and two of the documentation page (`felt-effects-*`) |
 
 ## License
 
