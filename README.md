@@ -34,6 +34,28 @@ The three worlds, on High quality, at 10:00 in the morning.
 
 ![The car on a knitted pink street between felt houses and trees](screenshots/land.jpg)
 
+### From a play session
+
+Five more screenshots from a play session in Chrome, in the afternoon (14:17 to 15:45 game time).
+
+**Over the town** — the felt bird at 73 km/h over the houses, a road, a car and walkers in Buttonbury:
+
+![The felt bird flies low over felt houses, a road with a car, walkers and street lamps](screenshots/bird-town.jpg)
+
+**Over the sea** — the felt bird at 80 km/h over the Shallows, with the coast and a mountain on the left:
+
+![The felt bird flies over stitched waves toward the coast and a mountain](screenshots/bird-sea.jpg)
+
+**On the sea floor** — the sea turtle at a depth of 74 m in the Deep Felt Sea, with fish schools, kelp, crabs and coral:
+
+![The sea turtle above the sea floor with fish schools, kelp, crabs and coral](screenshots/turtle-floor.jpg)
+
+**In the fish schools** — the sea turtle between schools of yellow, blue, red and green fish in golden-hour light:
+
+![The sea turtle between large yellow fish and schools of blue, red and green fish](screenshots/turtle-school.jpg)
+
+![The sea turtle below schools of blue, red and green fish, with yellow fish near the kelp](screenshots/turtle-schools.jpg)
+
 ## How the felt look is made
 
 **[Open the live page: How the felt look is made](https://az9713.github.io/opus-5.5-open-world-game/felt-effects.html)** (source: [`felt-effects.html`](felt-effects.html))
@@ -140,7 +162,7 @@ What the test covers, the results, and what is **not** tested are in [`tech-stac
 | `feltworld/physics-check.js` | The in-browser physics test |
 | `tech-stack.html` | Tech stack, physics design, and the test report |
 | `felt-effects.html` | How the felt look is made in code |
-| `screenshots/` | The screenshots in this README: three of the game (`air`, `underwater`, `land`) and two of the documentation page (`felt-effects-*`) |
+| `screenshots/` | The screenshots in this README: eight of the game (`air`, `underwater`, `land`, `bird-*`, `turtle-*`) and two of the documentation page (`felt-effects-*`) |
 
 ## License
 
