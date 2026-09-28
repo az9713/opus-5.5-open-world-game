@@ -7,3 +7,5 @@
 !/screenshots/
 !/feltworld/
 !/LICENSE
+# raw full-screen captures show browser profile, bookmarks and taskbar
+/screenshots/*.png
